@@ -1,24 +1,25 @@
-use std::sync::{Arc, Weak};
+use super::{ArgoCd, SharedArgoCd, WeakArgoCd};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub(crate) type SharedArgoCd = Arc<RwLock<ArgoCd>>;
-pub(crate) type WeakArgoCd = Weak<RwLock<ArgoCd>>;
-
-#[derive(Debug)]
-#[allow(unused)]
-pub(crate) struct ArgoCd {
-    pub(crate) name: String,
-    pub(crate) path: Vec<String>,
-    pub(crate) parent: Option<WeakArgoCd>,
-}
 impl ArgoCd {
     pub(crate) fn new_app_of_apps(name: String, parent: Option<WeakArgoCd>) -> SharedArgoCd {
         let path = ArgoCd::path(&parent, name.clone());
-        Arc::new(RwLock::new(ArgoCd { name, path, parent }))
+        Arc::new(RwLock::new(ArgoCd {
+            name,
+            path,
+            parent,
+            tear: None,
+        }))
     }
     pub(crate) fn new_application(name: String, parent: Option<WeakArgoCd>) -> SharedArgoCd {
         let path = ArgoCd::path(&parent, name.clone());
-        Arc::new(RwLock::new(ArgoCd { name, path, parent }))
+        Arc::new(RwLock::new(ArgoCd {
+            name,
+            path,
+            parent,
+            tear: None,
+        }))
     }
     fn path(parent: &Option<WeakArgoCd>, name: String) -> Vec<String> {
         let mut parent_path = match parent {
@@ -36,6 +37,7 @@ impl ArgoCd {
     }
 }
 
+#[cfg(test)]
 mod tests {
 
     #[allow(unused_imports)]
