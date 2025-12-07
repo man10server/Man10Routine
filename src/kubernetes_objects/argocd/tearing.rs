@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{ArgoCdError, SharedArgoCd, WeakArgoCd};
 use derive_debug::Dbg;
@@ -21,14 +21,13 @@ pub(super) struct Teardown {
     counter: AtomicUsize,
 }
 
-
 #[derive(Debug)]
-struct TearingArgoCdGuard {
+pub(crate) struct TearingArgoCdGuard {
     tear: Arc<RwLock<Teardown>>,
     dropped: bool,
 }
 
-trait TearingArgoCd {
+pub(crate) trait TearingArgoCd {
     async fn tear(&self, client: Client) -> Result<TearingArgoCdGuard, ArgoCdError>;
 }
 
@@ -49,18 +48,18 @@ impl TearingArgoCd for SharedArgoCd {
         };
 
         let name = &write_guard.name;
-        let original_sync_policy = match 
-            sync_teardown(name, client.clone()).await {
+        let original_sync_policy = match sync_teardown(name, client.clone()).await {
             Ok(policy) => policy,
             Err(e) => {
                 if let Some(upstream) = upstream
-                    && let Err(e) = upstream.close().await {
-                        eprintln!(
-                            "Failed to rollback upstream ArgoCd teardown after failing to \
+                    && let Err(e) = upstream.close().await
+                {
+                    eprintln!(
+                        "Failed to rollback upstream ArgoCd teardown after failing to \
                              sync_teardown for '{}': {}",
-                            name, e
-                        );
-                    }
+                        name, e
+                    );
+                }
                 return Err(e);
             }
         };
@@ -79,11 +78,14 @@ impl TearingArgoCd for SharedArgoCd {
     }
 }
 
-
-
 impl TearingArgoCdGuard {
     pub(crate) async fn close(mut self) -> Result<(), ArgoCdError> {
-        let c = self.tear.read().await.counter.fetch_sub(1, Ordering::SeqCst);
+        let c = self
+            .tear
+            .read()
+            .await
+            .counter
+            .fetch_sub(1, Ordering::SeqCst);
         if c == 1 {
             let mut teardown = self.tear.write().await;
             let argocd = &teardown.argocd.upgrade().ok_or(ArgoCdError::Dropped)?;
@@ -99,7 +101,6 @@ impl TearingArgoCdGuard {
                 Box::pin(upstream.close()).await?;
             }
             write_guard.tear = None;
-
         }
         self.dropped = true;
         Ok(())
@@ -117,7 +118,6 @@ impl Drop for TearingArgoCdGuard {
                     .and_then(|t| t.argocd.upgrade())
                     .and_then(|a| a.try_read().ok().map(|ag| ag.name.clone()))
                     .unwrap_or_else(|| "<dropped>".to_string())
-
             );
         }
     }
@@ -135,8 +135,6 @@ impl TeardownExt for Arc<RwLock<Teardown>> {
         }
     }
 }
-
-
 
 async fn sync_teardown(
     name: &str,

@@ -11,7 +11,6 @@ pub(crate) type SharedArgoCd = Arc<RwLock<ArgoCd>>;
 pub(crate) type WeakArgoCd = Weak<RwLock<ArgoCd>>;
 
 #[derive(Debug)]
-#[allow(unused)]
 pub(crate) struct ArgoCd {
     pub(crate) name: String,
     pub(crate) path: Vec<String>,
