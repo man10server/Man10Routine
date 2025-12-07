@@ -3,7 +3,6 @@ pub(crate) mod raw;
 use std::collections::BTreeMap;
 use std::iter;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 use self::raw::RawConfig;
 use crate::kubernetes_objects::argocd::{ArgoCd, SharedArgoCd, WeakArgoCd};
@@ -138,25 +137,24 @@ impl TryFrom<RawConfig> for Config {
 
         let namespace = raw.namespace;
         let mcproxy_argocd = Self::build_argocd_hierarchy(&mut argocds, &raw.mcproxy.argocd)?;
-        let mcproxy = Arc::new(RwLock::new(MinecraftChart {
-            name: raw
-                .mcproxy
+        let mcproxy = MinecraftChart::new(
+            raw.mcproxy
                 .name
                 .ok_or(ConfigParseError::McproxyNameMissing)?,
-            shigen: raw.mcproxy.shigen,
-            argocd: mcproxy_argocd,
-        }));
+            mcproxy_argocd,
+            raw.mcproxy.shigen,
+        );
         let mcservers = raw
             .mcservers
             .into_iter()
             .map(|(name, server)| {
                 let server_argocd = Self::build_argocd_hierarchy(&mut argocds, &server.argocd)?;
-                let mc_chart = MinecraftChart {
-                    name: server.name.unwrap_or_else(|| name.clone()),
-                    shigen: server.shigen,
-                    argocd: server_argocd,
-                };
-                Ok((name, Arc::new(RwLock::new(mc_chart))))
+                let mc_chart = MinecraftChart::new(
+                    server.name.unwrap_or_else(|| name.clone()),
+                    server_argocd,
+                    server.shigen,
+                );
+                Ok((name, mc_chart))
             })
             .collect::<Result<BTreeMap<_, _>, ConfigParseError>>()?;
 
