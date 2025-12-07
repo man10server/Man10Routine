@@ -115,7 +115,6 @@
           name = "man10-routine-dev";
           buildInputs = [
             rustToolchain
-            fenix.packages.${system}.rust-analyzer
           ];
         };
 
