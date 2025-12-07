@@ -49,26 +49,22 @@ pub(crate) enum ConfigLoadError {
 
     #[error("failed to read config file {0}: {1}")]
     FileUnreadable(PathBuf, io::Error),
-
 }
 
 impl Config {
     pub async fn new_from_file(path: &PathBuf) -> Result<Self, ConfigLoadError> {
-        let source_string = read_to_string(path).await.map_err(|e| {
-            ConfigLoadError::FileUnreadable(path.clone(), e)
-        })?;
+        let source_string = read_to_string(path)
+            .await
+            .map_err(|e| ConfigLoadError::FileUnreadable(path.clone(), e))?;
 
-        let raw_config: RawConfig = toml::from_str(&source_string).map_err(|e| {
-            ConfigLoadError::ContentUnserializable(path.clone(), e)
-        })?;
+        let raw_config: RawConfig = toml::from_str(&source_string)
+            .map_err(|e| ConfigLoadError::ContentUnserializable(path.clone(), e))?;
 
-        let config = Self::try_from(raw_config).map_err(|e| {
-            ConfigLoadError::ContentInvalid(path.clone(), e)
-        })?;
+        let config = Self::try_from(raw_config)
+            .map_err(|e| ConfigLoadError::ContentInvalid(path.clone(), e))?;
 
         Ok(config)
     }
-
 
     fn get_or_insert_argocd_apps_of_apps(
         argocds: &mut BTreeMap<String, SharedArgoCd>,
