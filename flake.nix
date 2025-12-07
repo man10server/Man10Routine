@@ -77,7 +77,7 @@
         checks = {
           inherit crate;
 
-          formatting-nix =
+          nix-fmt =
             pkgs.runCommand "check-nix-formatting"
               {
                 buildInputs = with pkgs; [
