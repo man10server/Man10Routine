@@ -14,3 +14,4 @@ k8s-openapi = { version = "0.26.0", features = ["v1_33"] }
 kcr_argoproj_io = "2.20251113.194744"
 serde_json = "1.0.145"
 derive-debug = "0.1.2"
+toml = "0.9.8"
