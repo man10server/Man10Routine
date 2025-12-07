@@ -106,6 +106,13 @@
             }
           );
 
+          crate-test = craneLib.cargoTest (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+            }
+          );
+
           crate-fmt = craneLib.cargoFmt {
             inherit src;
           };
@@ -115,7 +122,6 @@
           name = "man10-routine-dev";
           buildInputs = [
             rustToolchain
-            fenix.packages.${system}.rust-analyzer
           ];
         };
 
