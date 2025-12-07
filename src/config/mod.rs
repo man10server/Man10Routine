@@ -1,21 +1,24 @@
+#![allow(unused)]
 pub(crate) mod raw;
 
 use std::collections::BTreeMap;
 use std::iter;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use self::raw::RawConfig;
 use crate::kubernetes_objects::argocd::{ArgoCd, SharedArgoCd, WeakArgoCd};
 use crate::kubernetes_objects::minecraft_chart::{MinecraftChart, SharedMinecraftChart};
 use thiserror::Error;
+use tokio::fs::read_to_string;
+use tokio::io;
 
 #[derive(Debug, Clone)]
-#[allow(unused)]
 pub(crate) struct Config {
-    pub namespace: String,
-    pub argocds: BTreeMap<String, SharedArgoCd>,
-    pub mcproxy: SharedMinecraftChart,
-    pub mcservers: BTreeMap<String, SharedMinecraftChart>,
+    pub(crate) namespace: String,
+    pub(crate) argocds: BTreeMap<String, SharedArgoCd>,
+    pub(crate) mcproxy: SharedMinecraftChart,
+    pub(crate) mcservers: BTreeMap<String, SharedMinecraftChart>,
 }
 
 #[derive(Error, Debug)]
@@ -36,7 +39,37 @@ pub(crate) enum ConfigParseError {
     McproxyNameMissing,
 }
 
+#[derive(Error, Debug)]
+pub(crate) enum ConfigLoadError {
+    #[error("config file {0} is not valid: {1}")]
+    ContentInvalid(PathBuf, ConfigParseError),
+
+    #[error("config file {0} is not serializable: {1}")]
+    ContentUnserializable(PathBuf, toml::de::Error),
+
+    #[error("failed to read config file {0}: {1}")]
+    FileUnreadable(PathBuf, io::Error),
+
+}
+
 impl Config {
+    pub async fn new_from_file(path: &PathBuf) -> Result<Self, ConfigLoadError> {
+        let source_string = read_to_string(path).await.map_err(|e| {
+            ConfigLoadError::FileUnreadable(path.clone(), e)
+        })?;
+
+        let raw_config: RawConfig = toml::from_str(&source_string).map_err(|e| {
+            ConfigLoadError::ContentUnserializable(path.clone(), e)
+        })?;
+
+        let config = Self::try_from(raw_config).map_err(|e| {
+            ConfigLoadError::ContentInvalid(path.clone(), e)
+        })?;
+
+        Ok(config)
+    }
+
+
     fn get_or_insert_argocd_apps_of_apps(
         argocds: &mut BTreeMap<String, SharedArgoCd>,
         parent_name: Option<&str>,
