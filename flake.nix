@@ -106,6 +106,13 @@
             }
           );
 
+          crate-test = craneLib.cargoTest (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+            }
+          );
+
           crate-fmt = craneLib.cargoFmt {
             inherit src;
           };
