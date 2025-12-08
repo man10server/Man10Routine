@@ -20,7 +20,7 @@ pub enum AppError {
     KubeClientError(#[from] kube::Error),
 
     #[error("Daily routine stopped due to following error:\n{0}")]
-    DailyRoutineError(#[from] routine::daily::DailyRoutineError),
+    DailyRoutineError(#[from] crate::routine::daily::error::DailyRoutineError),
 }
 
 impl ExtractSpanTrace for AppError {
