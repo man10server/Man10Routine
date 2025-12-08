@@ -4,6 +4,7 @@ pub(crate) mod tearing;
 use std::sync::{Arc, Weak};
 use thiserror::Error;
 use tokio::sync::RwLock;
+use tracing_error::{ExtractSpanTrace, SpanTrace};
 
 use self::tearing::Teardown;
 
@@ -31,16 +32,31 @@ impl ArgoCd {
 }
 
 #[derive(Error, Debug, Clone)]
-pub(crate) enum ArgoCdError {
+pub enum ArgoCdError {
     #[error("Kubernetes API error: {0}")]
-    KubeError(String),
+    KubeError(String, SpanTrace),
 
     #[error("Argocd application was already dropped")]
-    Dropped,
+    Dropped(SpanTrace),
+}
+
+impl ExtractSpanTrace for ArgoCdError {
+    fn span_trace(&self) -> Option<&SpanTrace> {
+        match self {
+            ArgoCdError::KubeError(_, s) => Some(s),
+            ArgoCdError::Dropped(s) => Some(s),
+        }
+    }
 }
 
 impl From<kube::Error> for ArgoCdError {
     fn from(err: kube::Error) -> Self {
-        ArgoCdError::KubeError(err.to_string())
+        ArgoCdError::KubeError(err.to_string(), SpanTrace::capture())
+    }
+}
+
+impl ArgoCdError {
+    pub(crate) fn dropped() -> Self {
+        ArgoCdError::Dropped(SpanTrace::capture())
     }
 }

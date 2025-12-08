@@ -22,7 +22,7 @@ pub(crate) struct Config {
 }
 
 #[derive(Error, Debug)]
-pub(crate) enum ConfigParseError {
+pub enum ConfigParseError {
     #[error(
         "Parent mismatch for ArgoCD app '{name}': first defined parent '{first_parent}', but afterwards defined parent '{second_parent}'"
     )]
@@ -40,22 +40,22 @@ pub(crate) enum ConfigParseError {
 }
 
 #[derive(Error, Debug)]
-pub(crate) enum ConfigLoadError {
-    #[error("config file {0} is not valid: {1}")]
+pub enum ConfigLoadError {
+    #[error("Config file {0} is not valid: {1}")]
     ContentInvalid(PathBuf, ConfigParseError),
 
-    #[error("config file {0} is not serializable: {1}")]
+    #[error("Config file {0} is not serializable: {1}")]
     ContentUnserializable(PathBuf, toml::de::Error),
 
-    #[error("failed to read config file {0}: {1}")]
-    FileUnreadable(PathBuf, io::Error),
+    #[error("Config file {0} cannot be read: {1}")]
+    FailedToRead(PathBuf, io::Error),
 }
 
 impl Config {
     pub async fn new_from_file(path: &PathBuf) -> Result<Self, ConfigLoadError> {
         let source_string = read_to_string(path)
             .await
-            .map_err(|e| ConfigLoadError::FileUnreadable(path.clone(), e))?;
+            .map_err(|e| ConfigLoadError::FailedToRead(path.clone(), e))?;
 
         let raw_config: RawConfig = toml::from_str(&source_string)
             .map_err(|e| ConfigLoadError::ContentUnserializable(path.clone(), e))?;
@@ -172,6 +172,7 @@ impl TryFrom<RawConfig> for Config {
                 .ok_or(ConfigParseError::McproxyNameMissing)?,
             mcproxy_argocd,
             raw.mcproxy.shigen,
+            raw.mcproxy.rcon_container,
         );
         let mcservers = raw
             .mcservers
@@ -182,6 +183,7 @@ impl TryFrom<RawConfig> for Config {
                     server.name.unwrap_or_else(|| name.clone()),
                     server_argocd,
                     server.shigen,
+                    server.rcon_container,
                 );
                 Ok((name, mc_chart))
             })
@@ -209,6 +211,7 @@ mod tests {
             mcproxy: raw::RawMinecraftChart {
                 name: Some("mcproxy".to_string()),
                 argocd: "apps/minecraft/mcproxy".to_string(),
+                rcon_container: "mcproxy".to_string(),
                 shigen: false,
             },
             mcservers: BTreeMap::from([
@@ -217,6 +220,7 @@ mod tests {
                     raw::RawMinecraftChart {
                         name: Some("server1_customname".to_string()),
                         argocd: "apps/minecraft/servers/server1".to_string(),
+                        rcon_container: "server1".to_string(),
                         shigen: false,
                     },
                 ),
@@ -225,6 +229,7 @@ mod tests {
                     raw::RawMinecraftChart {
                         name: None,
                         argocd: "apps/minecraft/servers/server2".to_string(),
+                        rcon_container: "server2".to_string(),
                         shigen: true,
                     },
                 ),

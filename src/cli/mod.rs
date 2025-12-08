@@ -3,20 +3,23 @@ use clap::Subcommand;
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
+#[clap(
+    name = env!("CARGO_PKG_NAME"),
+    version = env!("CARGO_PKG_VERSION"),
+)]
 pub(crate) struct Cli {
     #[clap(subcommand)]
-    subcommand: SubCommands,
+    pub(crate) routine: Routine,
 
     #[clap(
-        short,
-        long,
+        long = "config",
         default_value = "/etc/man10routine/config.toml",
         global = true
     )]
-    config: PathBuf,
+    pub(crate) config: PathBuf,
 }
 
 #[derive(Debug, Clone, Subcommand)]
-pub(crate) enum SubCommands {
+pub(crate) enum Routine {
     Daily {},
 }
