@@ -1,8 +1,8 @@
 use thiserror::Error;
 use tracing::error;
-use tracing_error::TracedError;
 use tracing_error::{ExtractSpanTrace, SpanTrace};
 
+use crate::error::SpannedErr;
 use crate::kubernetes_objects::argocd::ArgoCdError;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChartError;
 
@@ -15,16 +15,19 @@ pub enum DailyRoutineError {
     MinecraftChart(#[from] MinecraftChartError),
 
     #[error("Minecraft Server {0} cannot be shutdown: {1}")]
-    ShutdownMinecraftServer(String, TracedError<ShutdownMinecraftServerError>),
+    ShutdownMinecraftServer(String, SpannedErr<ShutdownMinecraftServerError>),
 
     #[error("Kubernetes client error: {0}")]
-    KubeClient(#[from] TracedError<kube::Error>),
+    KubeClient(#[from] SpannedErr<kube::Error>),
 }
 
 #[derive(Error, Debug)]
 pub enum ShutdownMinecraftServerError {
     #[error("Kubernetes client error: {0}")]
     KubeClient(kube::Error),
+
+    #[error("Exec command error: {0}")]
+    Exec(#[source] Box<dyn std::error::Error + Send + Sync>),
 
     #[error("Failed to scale Statefulset: the statefulset has no 'replicas' field")]
     StatefulSetNoReplicas,
@@ -38,12 +41,8 @@ impl ExtractSpanTrace for DailyRoutineError {
         match self {
             DailyRoutineError::ArgoCd(e) => e.span_trace(),
             DailyRoutineError::MinecraftChart(e) => e.span_trace(),
-            DailyRoutineError::ShutdownMinecraftServer(_, e) => {
-                (e as &(dyn std::error::Error + 'static)).span_trace()
-            }
-            DailyRoutineError::KubeClient(e) => {
-                (e as &(dyn std::error::Error + 'static)).span_trace()
-            }
+            DailyRoutineError::ShutdownMinecraftServer(_, e) => e.span_trace(),
+            DailyRoutineError::KubeClient(e) => e.span_trace(),
         }
     }
 }

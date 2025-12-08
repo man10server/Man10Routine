@@ -21,13 +21,10 @@ async fn main() {
         .with(ErrorLayer::default())
         .init();
 
-    let original_panic_hook = panic::take_hook();
-
     panic::set_hook(Box::new(move |info| {
         error!("{}", info);
         let span_trace = SpanTrace::capture();
         eprintln!("\n{}\n", color_spantrace::colorize(&span_trace));
-        original_panic_hook(info);
     }));
 
     match app().await {

@@ -8,6 +8,7 @@ use tracing_error::SpanTrace;
 
 pub mod cli;
 pub mod config;
+pub mod error;
 pub mod kubernetes_objects;
 pub(crate) mod routine;
 
