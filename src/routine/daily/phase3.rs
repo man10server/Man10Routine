@@ -34,6 +34,7 @@ impl DailyRoutineContext {
 
                 async move {
                     let sts_name = mcserver.read().await.name.clone();
+                    let rcon_container = mcserver.read().await.rcon_container.clone();
                     let pod_name = format!("{sts_name}-0");
 
                     let span = trace_span!(
@@ -41,7 +42,8 @@ impl DailyRoutineContext {
                         kubernetes_namespace = %namespace,
                         statefulset_name = %sts_name,
                         pod_name = %pod_name,
-                        mcserver_name = %name
+                        mcserver_name = %name,
+                        rcon_container = %rcon_container,
                     );
 
                     async move {
@@ -55,15 +57,13 @@ impl DailyRoutineContext {
                             }
 
                             let pod_api: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+
                             let exec_result = pod_api
                                 .exec(
                                     &pod_name,
-                                    vec!["rcon-cli", "stop"],
+                                    ["rcon-cli", "stop"],
                                     &AttachParams::default()
-                                        .stdout(false)
-                                        .stderr(false)
-                                        .stdin(true)
-                                        .tty(true),
+                                        .container(&rcon_container)
                                 )
                                 .await;
 
@@ -84,7 +84,7 @@ impl DailyRoutineContext {
                                         })
                                     {
                                         warn!(
-                                            "Failed to exec shutdown on mcserver '{name}' (pod '{}'): {}",
+                                            "Failed to join executed stop command on mcserver '{name}' (pod '{}'): {}",
                                             pod_name,
                                             e
                                         );
@@ -92,7 +92,7 @@ impl DailyRoutineContext {
                                 }
                                 Err(e) => {
                                     warn!(
-                                        "Failed to exec shutdown on mcserver '{name}' (pod '{}'): {}",
+                                        "Failed to exec stop command on mcserver '{name}' (pod '{}'): {}",
                                         pod_name,
                                         e
                                     );

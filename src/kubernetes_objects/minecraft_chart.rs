@@ -23,6 +23,9 @@ pub(crate) struct MinecraftChart {
     /// Whether to use Shigen or not
     pub(crate) shigen: bool,
 
+    /// RCON Container name
+    pub(crate) rcon_container: String,
+
     argocd_tear: Option<Result<TearingArgoCdGuard, ArgoCdError>>,
 }
 
@@ -41,11 +44,17 @@ impl ExtractSpanTrace for MinecraftChartError {
 }
 
 impl MinecraftChart {
-    pub(crate) fn new(name: String, argocd: WeakArgoCd, shigen: bool) -> SharedMinecraftChart {
+    pub(crate) fn new(
+        name: String,
+        argocd: WeakArgoCd,
+        shigen: bool,
+        rcon_container: String,
+    ) -> SharedMinecraftChart {
         Arc::new(RwLock::new(MinecraftChart {
             name,
             argocd,
             shigen,
+            rcon_container,
             argocd_tear: None,
         }))
     }

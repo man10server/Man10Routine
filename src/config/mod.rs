@@ -172,6 +172,7 @@ impl TryFrom<RawConfig> for Config {
                 .ok_or(ConfigParseError::McproxyNameMissing)?,
             mcproxy_argocd,
             raw.mcproxy.shigen,
+            raw.mcproxy.rcon_container,
         );
         let mcservers = raw
             .mcservers
@@ -182,6 +183,7 @@ impl TryFrom<RawConfig> for Config {
                     server.name.unwrap_or_else(|| name.clone()),
                     server_argocd,
                     server.shigen,
+                    server.rcon_container,
                 );
                 Ok((name, mc_chart))
             })
@@ -209,6 +211,7 @@ mod tests {
             mcproxy: raw::RawMinecraftChart {
                 name: Some("mcproxy".to_string()),
                 argocd: "apps/minecraft/mcproxy".to_string(),
+                rcon_container: "mcproxy".to_string(),
                 shigen: false,
             },
             mcservers: BTreeMap::from([
@@ -217,6 +220,7 @@ mod tests {
                     raw::RawMinecraftChart {
                         name: Some("server1_customname".to_string()),
                         argocd: "apps/minecraft/servers/server1".to_string(),
+                        rcon_container: "server1".to_string(),
                         shigen: false,
                     },
                 ),
@@ -225,6 +229,7 @@ mod tests {
                     raw::RawMinecraftChart {
                         name: None,
                         argocd: "apps/minecraft/servers/server2".to_string(),
+                        rcon_container: "server2".to_string(),
                         shigen: true,
                     },
                 ),

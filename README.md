@@ -13,15 +13,17 @@ namespace = "default"
 [mcproxy]
 name = "mcproxy-dan5"
 argocd = "apps/minecraft/mcproxy-dan5"
-
-[mcservers.lgoin]
-argocd = "apps/minecraft/mcserver-login"
+container = "mcproxy"
 
 [mcservers.lobby]
+name = "mcserver-lobby"
 argocd = "apps/minecraft/mcserver-lobby"
+container = "mcserver"
 
 [mcservers.shigen]
+name = "mcserver-shigen"
 argocd = "apps/minecraft/mcserver-shigen"
+container = "mcserver"
 shigen = true
 ```
 
