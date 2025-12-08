@@ -10,7 +10,7 @@ use kube::{Api, Client};
 use serde_json::json;
 use tokio::sync::RwLock;
 use tracing::field::Empty;
-use tracing::{Instrument, Level, Span, error, info, trace_span};
+use tracing::{Instrument, Level, Span, error, info, trace_span, warn};
 use tracing_error::ExtractSpanTrace;
 
 use crate::kubernetes_objects::{ARGOCD_NAMESPACE, MANAGEER_ROLE_NAME};
@@ -179,6 +179,18 @@ async fn sync_teardown(
         .await?;
 
     let original = app.spec.sync_policy;
+
+    if original
+        .as_ref()
+        .and_then(|p| p.automated.as_ref())
+        .is_none()
+    {
+        warn!(
+            "ArgoCD application '{}' has no automated sync policy; skipping teardown.",
+            name
+        );
+        return Ok(original);
+    }
 
     async {
         let params = PatchParams::apply(MANAGEER_ROLE_NAME);
