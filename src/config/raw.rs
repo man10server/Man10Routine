@@ -1,6 +1,14 @@
 use std::collections::BTreeMap;
+use std::time::Duration;
 
+use super::Config;
+use crate::kubernetes_objects::argocd::SharedArgoCd;
+use crate::kubernetes_objects::job::CustomJob;
+use crate::kubernetes_objects::minecraft_chart::MinecraftChart;
+use duration_string::DurationString;
+use k8s_openapi::api::batch::v1::Job;
 use serde::Deserialize;
+use thiserror::Error;
 
 #[cfg_attr(test, derive(PartialEq))]
 #[derive(Deserialize, Debug, Clone)]
@@ -21,14 +29,159 @@ pub(super) struct RawMinecraftChart {
     /// Example: "apps/minecraft/mcserver-man10"
     pub(super) argocd: String,
 
-    /// Whether to use Shigen or not
-    #[serde(default = "default_shigen")]
-    pub(super) shigen: bool,
-
     /// RCON Container Name
     pub(super) rcon_container: String,
+
+    /// Custom jobs that have been created after snapshot of the volumes were taken
+    #[serde(default)]
+    pub(super) jobs_after_snapshot: BTreeMap<String, RawCustomJob>,
 }
 
-const fn default_shigen() -> bool {
-    false
+#[cfg_attr(test, derive(PartialEq))]
+#[derive(Deserialize, Debug, Clone)]
+pub(super) struct RawCustomJob {
+    /// Names of jobs that must complete before this job starts
+    #[serde(default)]
+    pub(super) dependencies: Vec<String>,
+
+    /// Kubernetes Job YAML
+    pub(super) manifest: Job,
+
+    /// Whether the job's successful completion is required to continue routine or not
+    #[serde(default = "default_required")]
+    pub(super) required: bool,
+
+    #[serde(default = "default_initial_wait")]
+    pub(super) initial_wait: DurationString,
+
+    #[serde(default = "default_max_wait")]
+    pub(super) max_wait: DurationString,
+
+    #[serde(default = "default_max_errors")]
+    pub(super) max_errors: u64,
+}
+
+const fn default_required() -> bool {
+    true
+}
+
+const fn default_initial_wait() -> DurationString {
+    DurationString::new(Duration::from_secs(600))
+}
+
+const fn default_max_wait() -> DurationString {
+    DurationString::new(Duration::from_secs(600))
+}
+
+const fn default_max_errors() -> u64 {
+    3
+}
+
+#[derive(Error, Debug)]
+pub enum ConfigParseError {
+    #[error(
+        "Parent mismatch for ArgoCD app '{name}': first defined parent '{first_parent}', but afterwards defined parent '{second_parent}'"
+    )]
+    ArgoCdParentMismatch {
+        name: String,
+        first_parent: String,
+        second_parent: String,
+    },
+
+    #[error("ArgoCD app '{name}' has multiple minecraft charts assigned")]
+    ArgoCdHasMultipleCharts { name: String },
+
+    #[error("mcproxy must have a name defined")]
+    McproxyNameMissing,
+
+    #[error("mcserver key '{name}' must not contain '/' characters")]
+    McserverNameIncludesSlash { name: String },
+
+    #[error("Job name '{job_name}' in chart '{chart_name}' must not contain '/' characters")]
+    JobNameIncludesSlash {
+        chart_name: String,
+        job_name: String,
+    },
+}
+
+impl TryFrom<RawConfig> for Config {
+    type Error = ConfigParseError;
+    fn try_from(raw: RawConfig) -> Result<Self, Self::Error> {
+        let mut argocds: BTreeMap<String, SharedArgoCd> = BTreeMap::new();
+
+        for name in raw.mcservers.keys() {
+            if name.contains('/') {
+                return Err(ConfigParseError::McserverNameIncludesSlash { name: name.clone() });
+            }
+        }
+
+        let namespace = raw.namespace;
+        let mcproxy_argocd = Self::build_argocd_hierarchy(&mut argocds, &raw.mcproxy.argocd)?;
+        let mcproxy_name = raw
+            .mcproxy
+            .name
+            .ok_or(ConfigParseError::McproxyNameMissing)?;
+        let mcproxy_jobs =
+            Self::build_jobs_after_snapshot(raw.mcproxy.jobs_after_snapshot, &mcproxy_name)?;
+        let mcproxy = MinecraftChart::new(
+            mcproxy_name,
+            mcproxy_argocd,
+            raw.mcproxy.rcon_container,
+            mcproxy_jobs,
+        );
+        let mcservers = raw
+            .mcservers
+            .into_iter()
+            .map(|(name, server)| {
+                let server_argocd = Self::build_argocd_hierarchy(&mut argocds, &server.argocd)?;
+                let server_name = server.name.unwrap_or_else(|| name.clone());
+                let jobs_after_snapshot =
+                    Self::build_jobs_after_snapshot(server.jobs_after_snapshot, &server_name)?;
+                let mc_chart = MinecraftChart::new(
+                    server_name,
+                    server_argocd,
+                    server.rcon_container,
+                    jobs_after_snapshot,
+                );
+                Ok((name, mc_chart))
+            })
+            .collect::<Result<BTreeMap<_, _>, ConfigParseError>>()?;
+
+        Ok(Config {
+            namespace,
+            argocds,
+            mcproxy,
+            mcservers,
+        })
+    }
+}
+
+impl Config {
+    fn build_jobs_after_snapshot(
+        raw_jobs: BTreeMap<String, RawCustomJob>,
+        chart_name: &str,
+    ) -> Result<BTreeMap<String, CustomJob>, ConfigParseError> {
+        raw_jobs
+            .into_iter()
+            .map(|(name, job)| {
+                if name.contains('/') {
+                    return Err(ConfigParseError::JobNameIncludesSlash {
+                        chart_name: chart_name.to_string(),
+                        job_name: name,
+                    });
+                }
+                Ok((
+                    name.clone(),
+                    CustomJob {
+                        dependencies: job.dependencies,
+                        manifest: job.manifest,
+                        required: job.required,
+                        initial_wait: job.initial_wait.into(),
+                        max_wait: job.max_wait.into(),
+                        max_errors: job.max_errors,
+                    },
+                ))
+            })
+            .collect()
+    }
 }

@@ -6,9 +6,10 @@ use std::iter;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+pub use self::raw::ConfigParseError;
 use self::raw::RawConfig;
 use crate::kubernetes_objects::argocd::{ArgoCd, SharedArgoCd, WeakArgoCd};
-use crate::kubernetes_objects::minecraft_chart::{MinecraftChart, SharedMinecraftChart};
+use crate::kubernetes_objects::minecraft_chart::SharedMinecraftChart;
 use thiserror::Error;
 use tokio::fs::read_to_string;
 use tokio::io;
@@ -19,24 +20,6 @@ pub(crate) struct Config {
     pub(crate) argocds: BTreeMap<String, SharedArgoCd>,
     pub(crate) mcproxy: SharedMinecraftChart,
     pub(crate) mcservers: BTreeMap<String, SharedMinecraftChart>,
-}
-
-#[derive(Error, Debug)]
-pub enum ConfigParseError {
-    #[error(
-        "Parent mismatch for ArgoCD app '{name}': first defined parent '{first_parent}', but afterwards defined parent '{second_parent}'"
-    )]
-    ArgoCdParentMismatch {
-        name: String,
-        first_parent: String,
-        second_parent: String,
-    },
-
-    #[error("ArgoCD app '{name}' has multiple minecraft charts assigned")]
-    ArgoCdHasMultipleCharts { name: String },
-
-    #[error("mcproxy must have a name defined")]
-    McproxyNameMissing,
 }
 
 #[derive(Error, Debug)]
@@ -159,45 +142,6 @@ impl Config {
     }
 }
 
-impl TryFrom<RawConfig> for Config {
-    type Error = ConfigParseError;
-    fn try_from(raw: RawConfig) -> Result<Self, Self::Error> {
-        let mut argocds: BTreeMap<String, SharedArgoCd> = BTreeMap::new();
-
-        let namespace = raw.namespace;
-        let mcproxy_argocd = Self::build_argocd_hierarchy(&mut argocds, &raw.mcproxy.argocd)?;
-        let mcproxy = MinecraftChart::new(
-            raw.mcproxy
-                .name
-                .ok_or(ConfigParseError::McproxyNameMissing)?,
-            mcproxy_argocd,
-            raw.mcproxy.shigen,
-            raw.mcproxy.rcon_container,
-        );
-        let mcservers = raw
-            .mcservers
-            .into_iter()
-            .map(|(name, server)| {
-                let server_argocd = Self::build_argocd_hierarchy(&mut argocds, &server.argocd)?;
-                let mc_chart = MinecraftChart::new(
-                    server.name.unwrap_or_else(|| name.clone()),
-                    server_argocd,
-                    server.shigen,
-                    server.rcon_container,
-                );
-                Ok((name, mc_chart))
-            })
-            .collect::<Result<BTreeMap<_, _>, ConfigParseError>>()?;
-
-        Ok(Config {
-            namespace,
-            argocds,
-            mcproxy,
-            mcservers,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -212,7 +156,7 @@ mod tests {
                 name: Some("mcproxy".to_string()),
                 argocd: "apps/minecraft/mcproxy".to_string(),
                 rcon_container: "mcproxy".to_string(),
-                shigen: false,
+                jobs_after_snapshot: BTreeMap::new(),
             },
             mcservers: BTreeMap::from([
                 (
@@ -221,7 +165,7 @@ mod tests {
                         name: Some("server1_customname".to_string()),
                         argocd: "apps/minecraft/servers/server1".to_string(),
                         rcon_container: "server1".to_string(),
-                        shigen: false,
+                        jobs_after_snapshot: BTreeMap::new(),
                     },
                 ),
                 (
@@ -230,7 +174,7 @@ mod tests {
                         name: None,
                         argocd: "apps/minecraft/servers/server2".to_string(),
                         rcon_container: "server2".to_string(),
-                        shigen: true,
+                        jobs_after_snapshot: BTreeMap::new(),
                     },
                 ),
             ]),
@@ -242,12 +186,10 @@ mod tests {
         {
             let server_1 = config.mcservers.get("server1").unwrap().try_read().unwrap();
             assert_eq!(server_1.name, "server1_customname");
-            assert!(!server_1.shigen);
         }
         {
             let server_2 = config.mcservers.get("server2").unwrap().try_read().unwrap();
             assert_eq!(server_2.name, "server2");
-            assert!(server_2.shigen);
         }
         {
             let server_1 = config.mcservers.get("server1").unwrap().try_read().unwrap();
@@ -276,7 +218,6 @@ mcservers:
   server2:
     argocd: "apps/minecraft/servers/server2"
     rcon_container: "server2"
-    shigen: true
 "#;
 
         let raw: RawConfig = serde_yaml::from_str(raw_yaml).expect("YAML should deserialize");
@@ -287,7 +228,7 @@ mcservers:
                 name: Some("mcproxy".to_string()),
                 argocd: "apps/minecraft/mcproxy".to_string(),
                 rcon_container: "mcproxy".to_string(),
-                shigen: false,
+                jobs_after_snapshot: BTreeMap::new(),
             },
             mcservers: BTreeMap::from([
                 (
@@ -296,7 +237,7 @@ mcservers:
                         name: Some("server1_customname".to_string()),
                         argocd: "apps/minecraft/servers/server1".to_string(),
                         rcon_container: "server1".to_string(),
-                        shigen: false,
+                        jobs_after_snapshot: BTreeMap::new(),
                     },
                 ),
                 (
@@ -305,7 +246,7 @@ mcservers:
                         name: None,
                         argocd: "apps/minecraft/servers/server2".to_string(),
                         rcon_container: "server2".to_string(),
-                        shigen: true,
+                        jobs_after_snapshot: BTreeMap::new(),
                     },
                 ),
             ]),

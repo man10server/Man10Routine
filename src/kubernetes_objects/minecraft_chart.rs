@@ -1,7 +1,9 @@
 #![allow(unused)]
 use crate::kubernetes_objects::argocd::tearing::TearingArgoCd;
+use k8s_openapi::api::batch::v1::Job;
 use kube::Client;
-use std::sync::Arc;
+use std::collections::BTreeMap;
+use std::sync::{Arc, Weak};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{Level, trace};
@@ -9,8 +11,10 @@ use tracing_error::{ExtractSpanTrace, SpanTrace};
 
 use super::argocd::tearing::TearingArgoCdGuard;
 use super::argocd::{ArgoCdError, WeakArgoCd};
+use super::job::CustomJob;
 
 pub(crate) type SharedMinecraftChart = Arc<RwLock<MinecraftChart>>;
+pub(crate) type WeakMinecraftChart = Weak<RwLock<MinecraftChart>>;
 
 #[derive(Debug)]
 pub(crate) struct MinecraftChart {
@@ -20,11 +24,11 @@ pub(crate) struct MinecraftChart {
     /// ArgoCD Application
     pub(crate) argocd: WeakArgoCd,
 
-    /// Whether to use Shigen or not
-    pub(crate) shigen: bool,
-
     /// RCON Container name
     pub(crate) rcon_container: String,
+
+    /// Custom jobs that have been created after snapshot of the volumes were taken
+    pub(crate) jobs_after_snapshot: BTreeMap<String, CustomJob>,
 
     argocd_tear: Option<Result<TearingArgoCdGuard, ArgoCdError>>,
 }
@@ -47,14 +51,14 @@ impl MinecraftChart {
     pub(crate) fn new(
         name: String,
         argocd: WeakArgoCd,
-        shigen: bool,
         rcon_container: String,
+        jobs_after_snapshot: BTreeMap<String, CustomJob>,
     ) -> SharedMinecraftChart {
         Arc::new(RwLock::new(MinecraftChart {
             name,
             argocd,
-            shigen,
             rcon_container,
+            jobs_after_snapshot,
             argocd_tear: None,
         }))
     }

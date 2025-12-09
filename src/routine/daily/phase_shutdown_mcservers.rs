@@ -7,6 +7,7 @@ use tracing::{Instrument, error, trace_span, warn};
 use tracing::{info, instrument};
 
 use crate::error::SpannedExt;
+use crate::kubernetes_objects::minecraft_chart::WeakMinecraftChart;
 use crate::routine::daily::error::DailyRoutineError;
 use crate::routine::daily::error::ShutdownMinecraftServerError;
 use crate::scheduler::TaskSpec;
@@ -15,24 +16,20 @@ use super::DailyRoutineContext;
 use super::scale_statefulset::scale_statefulset_to_zero;
 use super::wait_until_pod_stopped::wait_until_pod_stopped;
 
-#[instrument("phase_shutdown_mcserver", skip(ctx))]
+#[instrument("phase_shutdown_mcserver", skip_all)]
 async fn shutdown_mcserver(
     ctx: DailyRoutineContext,
-    mcserver_name: String,
+    mcserver: WeakMinecraftChart,
 ) -> Result<(), DailyRoutineError> {
     let client = ctx.client.clone();
     let namespace = ctx.config.namespace.clone();
-    let mcserver = ctx
-        .config
-        .mcservers
-        .get(&mcserver_name)
-        .cloned()
-        .expect("mcserver must exist in config");
 
-    let (sts_name, rcon_container) = {
-        let read = mcserver.read().await;
-        (read.name.clone(), read.rcon_container.clone())
-    };
+    let mcserver = mcserver.upgrade().expect("MinecraftChart has been dropped");
+    let read = mcserver.read().await;
+
+    let (mcserver_name, sts_name, rcon_container) =
+        { (&read.name, &read.name, &read.rcon_container) };
+
     let pod_name = format!("{sts_name}-0");
 
     let span = trace_span!(
@@ -46,7 +43,7 @@ async fn shutdown_mcserver(
 
     async move {
         let result: Result<(), DailyRoutineError> = async {
-            let scaled = scale_statefulset_to_zero(client.clone(), &namespace, &sts_name).await?;
+            let scaled = scale_statefulset_to_zero(client.clone(), &namespace, sts_name).await?;
 
             if !scaled {
                 return Ok(());
@@ -58,7 +55,7 @@ async fn shutdown_mcserver(
                 .exec(
                     &pod_name,
                     ["rcon-cli", "stop"],
-                    &AttachParams::default().container(&rcon_container),
+                    &AttachParams::default().container(rcon_container),
                 )
                 .await;
 
@@ -118,14 +115,11 @@ async fn shutdown_mcserver(
 
 pub(crate) fn task_shutdown_mcserver(
     task_name: String,
-    mcserver_name: String,
+    mcserver: WeakMinecraftChart,
 ) -> TaskSpec<DailyRoutineContext, DailyRoutineError> {
     TaskSpec::new(
         task_name,
         vec!["shutdown_mcproxy".to_string()],
-        move |ctx| {
-            let mcserver_name = mcserver_name.clone();
-            Box::pin(async move { shutdown_mcserver(ctx, mcserver_name.clone()).await })
-        },
+        move |ctx| Box::pin(async move { shutdown_mcserver(ctx, mcserver).await }),
     )
 }

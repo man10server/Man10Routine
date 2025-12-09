@@ -20,11 +20,10 @@ mcservers:
     name: "mcserver-lobby"
     argocd: "apps/minecraft/mcserver-lobby"
     rcon_container: "mcserver"
-  shigen:
-    name: "mcserver-shigen"
-    argocd: "apps/minecraft/mcserver-shigen"
+  survival:
+    name: "mcserver-survival"
+    argocd: "apps/minecraft/mcserver-survival"
     rcon_container: "mcserver"
-    shigen: true
 ```
 
 ### Command
@@ -35,4 +34,4 @@ Do daily tasks:
   - Restart servers gracefully
   - Take an snapshot of servers
   - Create / Upload backups
-  - Reset shigen server
+  - Run arbitary Jobs of Kubernetes
