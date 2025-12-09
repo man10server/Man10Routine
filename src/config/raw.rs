@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
+use super::Config;
 use crate::kubernetes_objects::argocd::SharedArgoCd;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChart;
-use super::Config;
 use serde::Deserialize;
 use thiserror::Error;
 
@@ -45,12 +45,21 @@ pub enum ConfigParseError {
 
     #[error("mcproxy must have a name defined")]
     McproxyNameMissing,
+
+    #[error("Key '{name}' must not contain '/' characters")]
+    KeyIncludesSlash { name: String },
 }
 
 impl TryFrom<RawConfig> for Config {
     type Error = ConfigParseError;
     fn try_from(raw: RawConfig) -> Result<Self, Self::Error> {
         let mut argocds: BTreeMap<String, SharedArgoCd> = BTreeMap::new();
+
+        for name in raw.mcservers.keys() {
+            if name.contains('/') {
+                return Err(ConfigParseError::KeyIncludesSlash { name: name.clone() });
+            }
+        }
 
         let namespace = raw.namespace;
         let mcproxy_argocd = Self::build_argocd_hierarchy(&mut argocds, &raw.mcproxy.argocd)?;

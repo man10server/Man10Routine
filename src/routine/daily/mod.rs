@@ -70,14 +70,11 @@ fn build_daily_tasks(
         task_phase_shutdown_mcproxy,
     ));
 
-    let mut shutdown_mcserver_tasks: Vec<String> = Vec::new();
-
-    for name in ctx.config.mcservers.keys() {
-        let task_name = format!("shutdown_mcserver_{name}");
-        shutdown_mcserver_tasks.push(task_name.clone());
-
-        tasks.push(task_shutdown_mcserver(task_name, name.clone()));
-    }
+    ctx.config
+        .mcservers
+        .keys()
+        .map(|name| task_shutdown_mcserver(format!("shutdown_mcserver/{}", name), name.clone()))
+        .for_each(|task| tasks.push(task));
 
     tasks
 }
