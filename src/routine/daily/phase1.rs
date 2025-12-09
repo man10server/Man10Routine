@@ -20,14 +20,8 @@ async fn phase1(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
         .argocd_teardown(ctx.client.clone())
         .await?;
     info!("Teardown all mcservers...");
-    let mcservers: Vec<(String, _)> = ctx
-        .config
-        .mcservers
-        .iter()
-        .map(|(name, mcserver)| (name.clone(), mcserver.clone()))
-        .collect();
 
-    stream::iter(mcservers)
+    stream::iter(ctx.config.mcservers.clone())
         .map(|(name, mcserver)| {
             let name = name.clone();
             let client = ctx.client.clone();
