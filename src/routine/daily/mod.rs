@@ -19,6 +19,12 @@ use self::phase1::task_phase1;
 use self::phase2::task_phase2;
 use self::phase3::task_phase3;
 
+static DAILY_TASKS: &[TaskSpec<DailyRoutineContext, DailyRoutineError>] = &[
+    TaskSpec::new("phase1", &[], task_phase1),
+    TaskSpec::new("phase2", &["phase1"], task_phase2),
+    TaskSpec::new("phase3", &["phase2"], task_phase3),
+];
+
 #[derive(Clone)]
 pub(crate) struct DailyRoutineContext {
     pub(crate) config: Arc<Config>,
@@ -38,14 +44,7 @@ impl DailyRoutineContext {
         info!("Starting daily routine...");
 
         let shutdown = Shutdown::new();
-
-        let tasks: Vec<TaskSpec<DailyRoutineContext, DailyRoutineError>> = vec![
-            TaskSpec::new("phase1", &[], task_phase1),
-            TaskSpec::new("phase2", &["phase1"], task_phase2),
-            TaskSpec::new("phase3", &["phase2"], task_phase3),
-        ];
-
-        let scheduler = Scheduler::new(tasks, shutdown);
+        let scheduler = Scheduler::from_slice(DAILY_TASKS, shutdown);
         let result = match scheduler.run(self.clone()).await {
             Ok(inner) => inner,
             Err(join_err) => Err(DailyRoutineError::TaskJoin(join_err)),

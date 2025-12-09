@@ -17,7 +17,11 @@ pub struct TaskSpec<TCtx, E> {
 }
 
 impl<TCtx, E> TaskSpec<TCtx, E> {
-    pub fn new(name: &'static str, deps: &'static [&'static str], exec: TaskFn<TCtx, E>) -> Self {
+    pub const fn new(
+        name: &'static str,
+        deps: &'static [&'static str],
+        exec: TaskFn<TCtx, E>,
+    ) -> Self {
         Self { name, deps, exec }
     }
 }
@@ -34,13 +38,18 @@ where
     TCtx: Clone + Send + 'static,
     E: Send + 'static,
 {
-    pub fn new(tasks: Vec<TaskSpec<TCtx, E>>, shutdown: Shutdown) -> Self {
+    pub fn from_slice(tasks: &'static [TaskSpec<TCtx, E>], shutdown: Shutdown) -> Self {
         let mut tasks_map: HashMap<&'static str, TaskSpec<TCtx, E>> = HashMap::new();
         for task in tasks {
             if tasks_map.contains_key(task.name) {
                 panic!("Duplicate task name detected: {}", task.name);
             }
-            tasks_map.insert(task.name, task);
+            let spec = TaskSpec {
+                name: task.name,
+                deps: task.deps,
+                exec: task.exec,
+            };
+            tasks_map.insert(task.name, spec);
         }
 
         let mut indegree: HashMap<&'static str, usize> = HashMap::new();
