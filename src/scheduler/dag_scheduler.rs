@@ -3,14 +3,14 @@ use std::collections::{HashMap, VecDeque};
 use futures::future::BoxFuture;
 use thiserror::Error;
 use tokio::task::JoinSet;
-use tracing::{Instrument, instrument};
+use tracing::{Instrument, instrument, trace_span};
 
 use crate::error::{SpannedErr, SpannedExt};
 
 use super::shutdown::Shutdown;
 
 pub type TaskFuture<E> = BoxFuture<'static, Result<(), E>>;
-pub type TaskFn<TCtx, E> = Box<dyn Fn(TCtx) -> TaskFuture<E> + Send + 'static>;
+pub type TaskFn<TCtx, E> = Box<dyn FnOnce(TCtx) -> TaskFuture<E> + Send + 'static>;
 
 pub struct TaskSpec<TCtx, E> {
     pub name: String,
@@ -22,7 +22,7 @@ impl<TCtx, E> TaskSpec<TCtx, E> {
     pub fn new(
         name: impl Into<String>,
         deps: impl Into<Vec<String>>,
-        exec: impl Fn(TCtx) -> TaskFuture<E> + Send + 'static,
+        exec: impl FnOnce(TCtx) -> TaskFuture<E> + Send + 'static,
     ) -> Self {
         Self {
             name: name.into(),
@@ -116,13 +116,14 @@ where
 
                 let task_spec = self.tasks.remove(&task_name).expect("task must exist");
                 let exec = task_spec.exec;
-                let ctx_clone = ctx.clone();
+                let span = trace_span!("flight_task", task_name = %task_name);
+                let ctx = ctx.clone();
                 inflight.spawn(
                     async move {
-                        let res = exec(ctx_clone).await;
+                        let res = exec(ctx).await;
                         (task_name, res)
                     }
-                    .in_current_span(),
+                    .instrument(span.or_current()),
                 );
             }
 
