@@ -9,7 +9,7 @@ use crate::routine::daily::DailyRoutineError;
 impl DailyRoutineContext {
     #[instrument("finalizer", skip(self, result))]
     pub(super) async fn finalizer(
-        &mut self,
+        &self,
         result: Result<(), DailyRoutineError>,
     ) -> Result<(), DailyRoutineError> {
         info!("Tearup all ArgoCD applications of minecraft charts...");
@@ -19,7 +19,7 @@ impl DailyRoutineContext {
                 eprintln!("\n{}\n", color_spantrace::colorize(span_trace));
             }
         }
-        for (name, mcserver) in self.config.mcservers.iter_mut() {
+        for (name, mcserver) in self.config.mcservers.iter() {
             if let Err(e) = mcserver.write().await.release().await {
                 error!("Failed to release mcserver '{name}': {}", e);
                 if let Some(span_trace) = e.span_trace() {

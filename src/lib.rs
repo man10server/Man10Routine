@@ -45,7 +45,7 @@ pub async fn app() -> Result<(), AppError> {
 
     match cli.routine {
         Routine::Daily {} => {
-            let mut context = DailyRoutineContext::new(config, client);
+            let context = DailyRoutineContext::new(config, client);
             context.run().await?;
         }
     }
