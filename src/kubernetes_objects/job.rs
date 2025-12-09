@@ -2,9 +2,6 @@ use k8s_openapi::api::batch::v1::Job;
 
 #[derive(Debug, Clone)]
 pub(crate) struct CustomJob {
-    /// Internal job name
-    pub(crate) name: String,
-
     /// Names of jobs that must complete before this job starts
     pub(crate) dependencies: Vec<String>,
 

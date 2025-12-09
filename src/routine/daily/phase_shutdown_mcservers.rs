@@ -3,7 +3,7 @@ use std::time::Duration;
 use k8s_openapi::api::core::v1::Pod;
 use kube::Api;
 use kube::api::AttachParams;
-use tracing::{Instrument, Span, error, trace_span, warn};
+use tracing::{Instrument, error, trace_span, warn};
 use tracing::{info, instrument};
 
 use crate::error::SpannedExt;
@@ -24,16 +24,11 @@ async fn shutdown_mcserver(
     let client = ctx.client.clone();
     let namespace = ctx.config.namespace.clone();
 
-    let (mcserver_name, sts_name, rcon_container) = {
-        let mcserver = mcserver.upgrade().expect("MinecraftChart has been dropped");
-        let read = mcserver.read().await;
-        let mcserver_name = read.name.clone();
-        (
-            mcserver_name.clone(),
-            mcserver_name,
-            read.rcon_container.clone(),
-        )
-    };
+    let mcserver = mcserver.upgrade().expect("MinecraftChart has been dropped");
+    let read = mcserver.read().await;
+
+    let (mcserver_name, sts_name, rcon_container) =
+        { (&read.name, &read.name, &read.rcon_container) };
 
     let pod_name = format!("{sts_name}-0");
 
@@ -48,7 +43,7 @@ async fn shutdown_mcserver(
 
     async move {
         let result: Result<(), DailyRoutineError> = async {
-            let scaled = scale_statefulset_to_zero(client.clone(), &namespace, &sts_name).await?;
+            let scaled = scale_statefulset_to_zero(client.clone(), &namespace, sts_name).await?;
 
             if !scaled {
                 return Ok(());
@@ -60,7 +55,7 @@ async fn shutdown_mcserver(
                 .exec(
                     &pod_name,
                     ["rcon-cli", "stop"],
-                    &AttachParams::default().container(&rcon_container),
+                    &AttachParams::default().container(rcon_container),
                 )
                 .await;
 

@@ -142,7 +142,6 @@ impl Config {
                 Ok((
                     name.clone(),
                     CustomJob {
-                        name,
                         dependencies: job.dependencies,
                         manifest: job.manifest,
                     },
