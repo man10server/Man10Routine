@@ -1,4 +1,3 @@
-#![allow(unused)]
 pub(crate) mod raw;
 
 use std::collections::BTreeMap;
@@ -17,7 +16,8 @@ use tokio::io;
 #[derive(Debug, Clone)]
 pub(crate) struct Config {
     pub(crate) namespace: String,
-    pub(crate) argocds: BTreeMap<String, SharedArgoCd>,
+    #[allow(dead_code)]
+    argocds: BTreeMap<String, SharedArgoCd>,
     pub(crate) mcproxy: SharedMinecraftChart,
     pub(crate) mcservers: BTreeMap<String, SharedMinecraftChart>,
 }

@@ -1,12 +1,10 @@
-#![allow(unused)]
 use crate::kubernetes_objects::argocd::tearing::TearingArgoCd;
-use k8s_openapi::api::batch::v1::Job;
 use kube::Client;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Weak};
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tracing::{Level, trace};
+use tracing::Level;
 use tracing_error::{ExtractSpanTrace, SpanTrace};
 
 use super::argocd::tearing::TearingArgoCdGuard;
