@@ -72,20 +72,25 @@ jobs:
               dryRun = context.payload.inputs.dryrun === 'true';
             }
 
-            for (const cache in allCaches) {
-              const branch = getBranchNameFromRef(cache.ref);
-              if (i === 0) {
-                if (cache.ref === 'refs/heads/main') continue;
+            for (const cache of allCaches) {
+              const ref = cache.ref;
+              if (!ref) {
+                console.log(`Cache ${cache.id} has no ref; deleting...`);
+              } else {
+                if (ref === 'refs/heads/main') {
+                  continue;
+                }
+                const branch = getBranchNameFromRef(ref);
                 if (await isBranchExists(branch)) {
                   continue;
-                } else {
-                  console.log(`Branch ${branch} is no longer exists. deleting...`);
                 }
+                console.log(`Branch ${branch} no longer exists. deleting cache...`);
               }
+
               if (dryRun) {
-                console.log(`[Dry Run] Old cache for key "${cache.key}" (ID: ${cache.id}) would be deleted.`);
+                console.log(`[dry-run] Cache for key "${cache.key}" (ID: ${cache.id}) would be deleted.`);
               } else {
-                console.log(`Deleting old cache for key "${cache.key}" (ID: ${cache.id}).`);
+                console.log(`Deleting cache for key "${cache.key}" (ID: ${cache.id}).`);
                 await github.rest.actions.deleteActionsCacheById({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
