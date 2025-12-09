@@ -25,7 +25,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const perPage = 100;
+            const perPage = 1000;
             const maxPages = 10;
             let page = 1;
             let allCaches = [];
@@ -95,14 +95,16 @@ jobs:
               if (!ref) {
                 shouldDelete = true;
                 reason = 'no ref';
-              } else if (ref === 'refs/heads/main') {
-                continue;
               } else {
                 const parts = ref.split('/');
                 if (parts.length >= 3 && parts[1] === 'heads') {
                   const branch = parts.slice(2).join('/');
-                  if (await isBranchExists(branch)) {
-                    continue;
+                  if (ref === 'refs/heads/main') {
+                    shouldDelete = false;
+                    reason = `branch "${branch}" is protected (kept)`;
+                  } else if (await isBranchExists(branch)) {
+                    shouldDelete = false;
+                    reason = `branch "${branch}" still exists (kept)`;
                   } else {
                     shouldDelete = true;
                     reason = `branch "${branch}" no longer exists`;
@@ -111,7 +113,8 @@ jobs:
                   const pullNumber = Number(parts[2]);
                   if (Number.isInteger(pullNumber)) {
                     if (await isPullRequestExists(pullNumber)) {
-                      continue;
+                      shouldDelete = false;
+                      reason = `pull request #${pullNumber} still exists (kept)`;
                     } else {
                       shouldDelete = true;
                       reason = `pull request #${pullNumber} no longer exists`;
@@ -126,28 +129,25 @@ jobs:
                 }
               }
 
-              if (!shouldDelete) {
-                continue;
-              }
-
-              console.log(`Cache ${cache.id} (key: "${cache.key}") marked for deletion: ${reason}.`);
-
-              if (dryRun) {
-                console.log(`[dry-run] Cache for key "${cache.key}" (ID: ${cache.id}) would be deleted.`);
-              } else {
-                console.log(`Deleting cache for key "${cache.key}" (ID: ${cache.id}).`);
-                try {
-                  await github.rest.actions.deleteActionsCacheById({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    cache_id: cache.id,
-                  });
-                } catch (error) {
-                  if (error.status === 404) {
-                    console.log(`Cache ID ${cache.id} already deleted (404). Skipping.`);
-                  } else {
-                    console.warn(`Failed to delete cache ID ${cache.id}: ${error.status} ${error.message}`);
+              if (shouldDelete) {
+                console.log(`Cache ${cache.id} (key: "${cache.key}") marked for deletion: ${reason}.`);
+                if (!dryRun) {
+                  console.log(`Deleting cache for key "${cache.key}" (ID: ${cache.id}).`);
+                  try {
+                    await github.rest.actions.deleteActionsCacheById({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      cache_id: cache.id,
+                    });
+                  } catch (error) {
+                    if (error.status === 404) {
+                      console.log(`Cache ID ${cache.id} already deleted (404). Skipping.`);
+                    } else {
+                      console.warn(`Failed to delete cache ID ${cache.id}: ${error.status} ${error.message}`);
+                    }
                   }
                 }
+              } else {
+                console.log(`Cache ${cache.id} (key: "${cache.key}") kept: ${reason}.`);
               }
             }
