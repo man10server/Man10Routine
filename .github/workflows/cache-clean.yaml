@@ -31,12 +31,10 @@ jobs:
             let allCaches = [];
 
             const branchExistsCache = new Map();
-            const prExistsCache = new Map();
+            const prOpenCache = new Map();
 
             const isBranchExists = async (branchName) => {
-              if (branchExistsCache.has(branchName)) {
-                return branchExistsCache.get(branchName);
-              }
+              if (branchExistsCache.has(branchName)) return branchExistsCache.get(branchName);
               try {
                 await github.rest.repos.getBranch({
                   owner: context.repo.owner,
@@ -55,21 +53,20 @@ jobs:
               }
             };
 
-            const isPullRequestExists = async (pullNumber) => {
-              if (prExistsCache.has(pullNumber)) {
-                return prExistsCache.get(pullNumber);
-              }
+            const isPullRequestOpen = async (pullNumber) => {
+              if (prOpenCache.has(pullNumber)) return prOpenCache.get(pullNumber);
               try {
-                await github.rest.pulls.get({
+                const { data } = await github.rest.pulls.get({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   pull_number: pullNumber,
                 });
-                prExistsCache.set(pullNumber, true);
-                return true;
+                const isOpen = data.state === 'open';
+                prOpenCache.set(pullNumber, isOpen);
+                return isOpen;
               } catch (error) {
                 if (error.status === 404) {
-                  prExistsCache.set(pullNumber, false);
+                  prOpenCache.set(pullNumber, false);
                   return false;
                 } else {
                   throw error;
@@ -87,9 +84,7 @@ jobs:
 
               allCaches = allCaches.concat(response.data.actions_caches);
 
-              if (response.data.actions_caches.length < perPage) {
-                break;
-              }
+              if (response.data.actions_caches.length < perPage) break;
               page++;
             }
 
@@ -125,12 +120,12 @@ jobs:
                 } else if (parts.length >= 3 && parts[1] === 'pull') {
                   const pullNumber = Number(parts[2]);
                   if (Number.isInteger(pullNumber)) {
-                    if (await isPullRequestExists(pullNumber)) {
+                    if (await isPullRequestOpen(pullNumber)) {
                       shouldDelete = false;
-                      reason = `pull request #${pullNumber} still exists (kept)`;
+                      reason = `pull request #${pullNumber} is still open (kept)`;
                     } else {
                       shouldDelete = true;
-                      reason = `pull request #${pullNumber} no longer exists`;
+                      reason = `pull request #${pullNumber} is not open`;
                     }
                   } else {
                     shouldDelete = true;
