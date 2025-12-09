@@ -5,11 +5,12 @@ use std::time::Duration;
 
 use tracing::{info, instrument};
 
+use crate::routine::daily::error::DailyRoutineError;
 use crate::routine::daily::scale_statefulset::scale_statefulset_to_zero;
 use crate::routine::daily::wait_until_pod_stopped::wait_until_pod_stopped;
 
-#[instrument(name = "phase2", skip(ctx))]
-async fn phase2(ctx: DailyRoutineContext) -> Result<(), super::error::DailyRoutineError> {
+#[instrument(name = "phase_shutdown_mcproxy", skip(ctx))]
+async fn phase_shutdown_mcproxy(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
     let proxy_sts_name = &ctx.config.mcproxy.read().await.name;
     info!("Stopping proxy server...");
     let scaled =
@@ -29,11 +30,13 @@ async fn phase2(ctx: DailyRoutineContext) -> Result<(), super::error::DailyRouti
     )
     .await?;
 
-    info!("Phase2 completed. Sleeping for 10 seconds before continuing...");
+    info!("Phase 'shutdown_mcproxy' completed. Sleeping for 10 seconds before continuing...");
     tokio::time::sleep(Duration::from_secs(10)).await;
     Ok(())
 }
 
-pub(crate) fn task_phase2(ctx: DailyRoutineContext) -> TaskFuture<super::error::DailyRoutineError> {
-    Box::pin(phase2(ctx))
+pub(crate) fn task_phase_shutdown_mcproxy(
+    ctx: DailyRoutineContext,
+) -> TaskFuture<DailyRoutineError> {
+    Box::pin(phase_shutdown_mcproxy(ctx))
 }

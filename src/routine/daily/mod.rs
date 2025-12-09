@@ -1,8 +1,8 @@
 pub mod error;
 mod finalizer;
-mod phase1;
-mod phase2;
-mod phase3;
+mod phase_argocd_teardown;
+mod phase_shutdown_mcproxy;
+mod phase_shutdown_mcservers;
 mod scale_statefulset;
 mod wait_until_pod_stopped;
 
@@ -15,14 +15,22 @@ use crate::config::Config;
 use crate::scheduler::{Scheduler, Shutdown, TaskSpec};
 
 use self::error::DailyRoutineError;
-use self::phase1::task_phase1;
-use self::phase2::task_phase2;
-use self::phase3::task_phase3;
+use self::phase_argocd_teardown::task_phase_argocd_teardown;
+use self::phase_shutdown_mcproxy::task_phase_shutdown_mcproxy;
+use self::phase_shutdown_mcservers::task_phase_shutdown_mcservers;
 
 static DAILY_TASKS: &[TaskSpec<DailyRoutineContext, DailyRoutineError>] = &[
-    TaskSpec::new("phase1", &[], task_phase1),
-    TaskSpec::new("phase2", &["phase1"], task_phase2),
-    TaskSpec::new("phase3", &["phase2"], task_phase3),
+    TaskSpec::new("argocd_teardown", &[], task_phase_argocd_teardown),
+    TaskSpec::new(
+        "shutdown_mcproxy",
+        &["argocd_teardown"],
+        task_phase_shutdown_mcproxy,
+    ),
+    TaskSpec::new(
+        "shutdown_mcservers",
+        &["shutdown_mcproxy"],
+        task_phase_shutdown_mcservers,
+    ),
 ];
 
 #[derive(Clone)]

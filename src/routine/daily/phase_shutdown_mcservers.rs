@@ -16,8 +16,8 @@ use tracing::{Instrument, error, info, instrument, trace_span, warn};
 use crate::error::SpannedExt;
 use crate::routine::daily::error::ShutdownMinecraftServerError;
 
-#[instrument(name = "phase3", skip(ctx))]
-async fn phase3(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
+#[instrument(name = "phase_shutdown_mcservers", skip(ctx))]
+async fn phase_shutdown_mcservers(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
     info!("Stopping all mcservers...");
 
     let client = ctx.client.clone();
@@ -132,11 +132,15 @@ async fn phase3(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
         .try_for_each(|_| async { Ok::<(), DailyRoutineError>(()) })
         .await?;
 
-    info!("Phase3 completed. Sleeping for 30 seconds for the databases to stabilize...");
+    info!(
+        "Phase 'shutdown_mcservers' completed. Sleeping for 30 seconds for the databases to stabilize..."
+    );
     tokio::time::sleep(Duration::from_secs(30)).await;
     Ok(())
 }
 
-pub(crate) fn task_phase3(ctx: DailyRoutineContext) -> TaskFuture<DailyRoutineError> {
-    Box::pin(phase3(ctx))
+pub(crate) fn task_phase_shutdown_mcservers(
+    ctx: DailyRoutineContext,
+) -> TaskFuture<DailyRoutineError> {
+    Box::pin(phase_shutdown_mcservers(ctx))
 }

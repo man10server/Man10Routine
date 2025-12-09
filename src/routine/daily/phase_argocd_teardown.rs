@@ -10,8 +10,8 @@ use tracing::{Instrument, error, info, instrument};
 use crate::kubernetes_objects::minecraft_chart::MinecraftChartError;
 use crate::routine::daily::DailyRoutineError;
 
-#[instrument(name = "phase1", skip(ctx))]
-async fn phase1(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
+#[instrument(name = "phase_argocd_teardown", skip(ctx))]
+async fn phase_argocd_teardown(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
     info!("Teardown all ArgoCD applications of minecraft charts...");
     ctx.config
         .mcproxy
@@ -20,8 +20,14 @@ async fn phase1(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
         .argocd_teardown(ctx.client.clone())
         .await?;
     info!("Teardown all mcservers...");
+    let mcservers: Vec<(String, _)> = ctx
+        .config
+        .mcservers
+        .iter()
+        .map(|(name, mcserver)| (name.clone(), mcserver.clone()))
+        .collect();
 
-    stream::iter(ctx.config.mcservers.clone())
+    stream::iter(mcservers)
         .map(|(name, mcserver)| {
             let name = name.clone();
             let client = ctx.client.clone();
@@ -42,11 +48,13 @@ async fn phase1(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
         .await
         .map_err(DailyRoutineError::from)?;
 
-    info!("Phase1 completed. Sleeping for 10 seconds before continuing...");
+    info!("Phase 'argocd_teardown' completed. Sleeping for 10 seconds before continuing...");
     sleep(Duration::from_secs(10)).await;
     Ok(())
 }
 
-pub(crate) fn task_phase1(ctx: DailyRoutineContext) -> TaskFuture<DailyRoutineError> {
-    Box::pin(phase1(ctx))
+pub(crate) fn task_phase_argocd_teardown(
+    ctx: DailyRoutineContext,
+) -> TaskFuture<DailyRoutineError> {
+    Box::pin(phase_argocd_teardown(ctx))
 }
