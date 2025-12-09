@@ -1,0 +1,95 @@
+name: Cache Cleanup
+
+on:
+  schedule:
+    - cron: 0 0 * * *
+  pull_request:
+    types:
+      - closed
+  workflow_dispatch:
+    inputs:
+      dryrun:
+        type: boolean
+        description: 'Perform a dry run without deleting caches'
+        default: true
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old caches
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const perPage = 100;
+            const maxPages = 10;
+            let page = 1;
+            let allCaches = [];
+
+            const isBranchExists = async branchName => {
+              try {
+                await github.rest.repos.getBranch({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  branch: branchName,
+                });
+                return true;
+              } catch (error) {
+                if (error.status === 404) {
+                  return false;
+                } else {
+                  throw error;
+                }
+              }
+            };
+
+            const getBranchNameFromRef = ref => ref.split('/').slice(2).join('/');
+
+            while (page <= maxPages) {
+              const response = await github.rest.actions.getActionsCacheList({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: perPage,
+                page,
+              });
+
+              allCaches = allCaches.concat(response.data.actions_caches);
+
+              if (response.data.actions_caches.length < perPage) {
+                break;
+              }
+              page++;
+            }
+
+            console.log(`Found ${allCaches.length} caches in total.`);
+
+            let dryRun = false;
+            if (context.eventName === 'workflow_dispatch' && context.payload.inputs) {
+              dryRun = context.payload.inputs.dryrun === 'true';
+            }
+
+            for (const cache in allCaches) {
+              const branch = getBranchNameFromRef(cache.ref);
+              if (i === 0) {
+                if (cache.ref === 'refs/heads/main') continue;
+                if (await isBranchExists(branch)) {
+                  continue;
+                } else {
+                  console.log(`Branch ${branch} is no longer exists. deleting...`);
+                }
+              }
+              if (dryRun) {
+                console.log(`[Dry Run] Old cache for key "${cache.key}" (ID: ${cache.id}) would be deleted.`);
+              } else {
+                console.log(`Deleting old cache for key "${cache.key}" (ID: ${cache.id}).`);
+                await github.rest.actions.deleteActionsCacheById({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  cache_id: cache.id,
+                });
+              }
+            }
