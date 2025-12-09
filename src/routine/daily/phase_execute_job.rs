@@ -67,7 +67,7 @@ async fn execute_job(
         )
         .await
         {
-            Ok(status) if status.failed == Some(0) => Ok(()),
+            Ok(status) if status.failed == Some(0) || status.failed.is_none() => Ok(()),
             Ok(status) => Err(DailyRoutineError::CustomJobHasFailure(
                 created_job_name.to_string(),
                 status,

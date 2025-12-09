@@ -34,7 +34,7 @@ pub(super) async fn wait_until_job_finished(
         match job_api.get(job_name).await {
             Ok(job) => {
                 let status = job.status.unwrap_or_default();
-                if status.active == Some(0) {
+                if status.active == Some(0) || status.active.is_none() {
                     info!(
                         "Job '{}' has finished after {} seconds.",
                         job_name,
