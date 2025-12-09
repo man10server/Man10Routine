@@ -10,7 +10,6 @@ use tracing::{info, instrument};
 
 use crate::error::SpannedExt;
 
-#[allow(dead_code)]
 #[instrument("wait_until_job_finished", skip(client), level = "trace")]
 pub(super) async fn wait_until_job_finished(
     client: Client,

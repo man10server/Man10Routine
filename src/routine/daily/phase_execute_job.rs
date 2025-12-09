@@ -1,7 +1,7 @@
 use k8s_openapi::api::batch::v1::Job;
 use kube::Api;
 use kube::api::PostParams;
-use tracing::{Instrument, instrument, trace_span};
+use tracing::{Instrument, error, info, instrument, trace_span};
 use tracing_error::SpanTrace;
 
 use crate::error::SpannedExt;
@@ -14,7 +14,6 @@ use crate::scheduler::TaskFuture;
 use super::DailyRoutineContext;
 use super::error::DailyRoutineError;
 
-#[allow(unused)]
 #[instrument("phase_execute_job", skip(ctx, mcserver, job))]
 async fn execute_job(
     ctx: DailyRoutineContext,
@@ -79,25 +78,22 @@ async fn execute_job(
     .instrument(span)
     .await;
 
-    result
-        .as_ref()
-        .inspect(|_| {
-            tracing::info!(
+    match result {
+        Ok(_) => {
+            info!(
                 "Job '{}' for mcserver '{}' executed successfully.",
-                job_name,
-                mcserver_name
-            )
-        })
-        .inspect_err(|e| {
-            tracing::error!(
+                job_name, mcserver_name
+            );
+            Ok(())
+        }
+        Err(e) => {
+            error!(
                 "Failed to execute job '{}' for mcserver '{}': {}",
-                job_name,
-                mcserver_name,
-                e
-            )
-        });
-
-    if job.required { result } else { Ok(()) }
+                job_name, mcserver_name, e
+            );
+            if job.required { Err(e) } else { Ok(()) }
+        }
+    }
 }
 
 pub(crate) fn task_execute_job(
