@@ -1,10 +1,10 @@
 use thiserror::Error;
-use tracing::error;
 use tracing_error::{ExtractSpanTrace, SpanTrace};
 
 use crate::error::SpannedErr;
 use crate::kubernetes_objects::argocd::ArgoCdError;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChartError;
+use crate::scheduler::InvalidDagError;
 
 #[derive(Error, Debug)]
 pub enum DailyRoutineError {
@@ -22,6 +22,9 @@ pub enum DailyRoutineError {
 
     #[error("Task join error: {0}")]
     TaskJoin(#[from] tokio::task::JoinError),
+
+    #[error("Invalid task DAG: {0}")]
+    InvalidTaskDag(#[from] SpannedErr<InvalidDagError>),
 }
 
 #[derive(Error, Debug)]
@@ -47,6 +50,7 @@ impl ExtractSpanTrace for DailyRoutineError {
             DailyRoutineError::ShutdownMinecraftServer(_, e) => e.span_trace(),
             DailyRoutineError::KubeClient(e) => e.span_trace(),
             DailyRoutineError::TaskJoin(_) => None,
+            DailyRoutineError::InvalidTaskDag(e) => e.span_trace(),
         }
     }
 }

@@ -1,8 +1,11 @@
 use std::collections::{HashMap, VecDeque};
 
 use futures::future::BoxFuture;
+use thiserror::Error;
 use tokio::task::JoinSet;
-use tracing::Instrument;
+use tracing::{Instrument, instrument};
+
+use crate::error::{SpannedErr, SpannedExt};
 
 use super::shutdown::Shutdown;
 
@@ -36,16 +39,29 @@ pub struct Scheduler<TCtx, E> {
     shutdown: Shutdown,
 }
 
+#[derive(Error, Debug)]
+pub enum InvalidDagError {
+    #[error("Duplicate task name detected: {0}")]
+    DuplicateTaskName(String),
+
+    #[error("Task '{task}' depends on unknown task '{dependency}'")]
+    UnknownDependency { task: String, dependency: String },
+}
+
 impl<TCtx, E> Scheduler<TCtx, E>
 where
     TCtx: Clone + Send + 'static,
     E: Send + 'static,
 {
-    pub fn from_tasks(tasks: Vec<TaskSpec<TCtx, E>>, shutdown: Shutdown) -> Self {
+    #[instrument(skip(tasks, shutdown))]
+    pub fn from_tasks(
+        tasks: Vec<TaskSpec<TCtx, E>>,
+        shutdown: Shutdown,
+    ) -> Result<Self, SpannedErr<InvalidDagError>> {
         let mut tasks_map: HashMap<String, TaskSpec<TCtx, E>> = HashMap::new();
         for task in tasks.into_iter() {
             if tasks_map.contains_key(&task.name) {
-                panic!("Duplicate task name detected: {}", task.name);
+                return Err(InvalidDagError::DuplicateTaskName(task.name)).with_span_trace();
             }
             tasks_map.insert(task.name.clone(), task);
         }
@@ -57,7 +73,11 @@ where
             indegree.entry(task.name.clone()).or_insert(0);
             for dep in &task.deps {
                 if !tasks_map.contains_key(dep) {
-                    panic!("Task '{}' depends on unknown task '{}'", task.name, dep);
+                    return Err(InvalidDagError::UnknownDependency {
+                        task: task.name.clone(),
+                        dependency: dep.clone(),
+                    })
+                    .with_span_trace();
                 }
                 reverse_edges
                     .entry(dep.clone())
@@ -67,12 +87,12 @@ where
             }
         }
 
-        Scheduler {
+        Ok(Scheduler {
             tasks: tasks_map,
             reverse_edges,
             indegree,
             shutdown,
-        }
+        })
     }
 
     pub async fn run(mut self, ctx: TCtx) -> Result<Result<(), E>, tokio::task::JoinError> {

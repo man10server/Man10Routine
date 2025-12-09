@@ -39,7 +39,7 @@ impl DailyRoutineContext {
 
         let shutdown = Shutdown::new();
         let tasks = build_daily_tasks(self);
-        let scheduler = Scheduler::from_tasks(tasks, shutdown);
+        let scheduler = Scheduler::from_tasks(tasks, shutdown)?;
         let result = match scheduler.run(self.clone()).await {
             Ok(inner) => inner,
             Err(join_err) => Err(DailyRoutineError::TaskJoin(join_err)),
