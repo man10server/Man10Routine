@@ -72,8 +72,13 @@ fn build_daily_tasks(
 
     ctx.config
         .mcservers
-        .keys()
-        .map(|name| task_shutdown_mcserver(format!("shutdown_mcserver/{}", name), name.clone()))
+        .iter()
+        .map(|(name, mcserver)| {
+            task_shutdown_mcserver(
+                format!("shutdown_mcserver/{}", name),
+                Arc::downgrade(mcserver),
+            )
+        })
         .for_each(|task| tasks.push(task));
 
     tasks

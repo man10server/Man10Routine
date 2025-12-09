@@ -3,7 +3,7 @@ use crate::kubernetes_objects::argocd::tearing::TearingArgoCd;
 use k8s_openapi::api::batch::v1::Job;
 use kube::Client;
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{Level, trace};
@@ -14,6 +14,7 @@ use super::argocd::{ArgoCdError, WeakArgoCd};
 use super::job::CustomJob;
 
 pub(crate) type SharedMinecraftChart = Arc<RwLock<MinecraftChart>>;
+pub(crate) type WeakMinecraftChart = Weak<RwLock<MinecraftChart>>;
 
 #[derive(Debug)]
 pub(crate) struct MinecraftChart {
