@@ -30,7 +30,7 @@ jobs:
             let page = 1;
             let allCaches = [];
 
-            const isBranchExists = async branchName => {
+            const isBranchExists = async (branchName) => {
               try {
                 await github.rest.repos.getBranch({
                   owner: context.repo.owner,
@@ -47,7 +47,22 @@ jobs:
               }
             };
 
-            const getBranchNameFromRef = ref => ref.split('/').slice(2).join('/');
+            const isPullRequestExists = async (pullNumber) => {
+              try {
+                await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pullNumber,
+                });
+                return true;
+              } catch (error) {
+                if (error.status === 404) {
+                  return false;
+                } else {
+                  throw error;
+                }
+              }
+            };
 
             while (page <= maxPages) {
               const response = await github.rest.actions.getActionsCacheList({
@@ -74,27 +89,65 @@ jobs:
 
             for (const cache of allCaches) {
               const ref = cache.ref;
+              let shouldDelete = false;
+              let reason = '';
+
               if (!ref) {
-                console.log(`Cache ${cache.id} has no ref; deleting...`);
+                shouldDelete = true;
+                reason = 'no ref';
+              } else if (ref === 'refs/heads/main') {
+                continue;
               } else {
-                if (ref === 'refs/heads/main') {
-                  continue;
+                const parts = ref.split('/');
+                if (parts.length >= 3 && parts[1] === 'heads') {
+                  const branch = parts.slice(2).join('/');
+                  if (await isBranchExists(branch)) {
+                    continue;
+                  } else {
+                    shouldDelete = true;
+                    reason = `branch "${branch}" no longer exists`;
+                  }
+                } else if (parts.length >= 3 && parts[1] === 'pull') {
+                  const pullNumber = Number(parts[2]);
+                  if (Number.isInteger(pullNumber)) {
+                    if (await isPullRequestExists(pullNumber)) {
+                      continue;
+                    } else {
+                      shouldDelete = true;
+                      reason = `pull request #${pullNumber} no longer exists`;
+                    }
+                  } else {
+                    shouldDelete = true;
+                    reason = `invalid pull number in ref "${ref}"`;
+                  }
+                } else {
+                  shouldDelete = true;
+                  reason = `non-branch/non-PR ref "${ref}"`;
                 }
-                const branch = getBranchNameFromRef(ref);
-                if (await isBranchExists(branch)) {
-                  continue;
-                }
-                console.log(`Branch ${branch} no longer exists. deleting cache...`);
               }
+
+              if (!shouldDelete) {
+                continue;
+              }
+
+              console.log(`Cache ${cache.id} (key: "${cache.key}") marked for deletion: ${reason}.`);
 
               if (dryRun) {
                 console.log(`[dry-run] Cache for key "${cache.key}" (ID: ${cache.id}) would be deleted.`);
               } else {
                 console.log(`Deleting cache for key "${cache.key}" (ID: ${cache.id}).`);
-                await github.rest.actions.deleteActionsCacheById({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  cache_id: cache.id,
-                });
+                try {
+                  await github.rest.actions.deleteActionsCacheById({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    cache_id: cache.id,
+                  });
+                } catch (error) {
+                  if (error.status === 404) {
+                    console.log(`Cache ID ${cache.id} already deleted (404). Skipping.`);
+                  } else {
+                    console.warn(`Failed to delete cache ID ${cache.id}: ${error.status} ${error.message}`);
+                  }
+                }
               }
             }
