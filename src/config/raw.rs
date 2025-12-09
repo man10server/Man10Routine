@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use super::Config;
 use crate::kubernetes_objects::argocd::SharedArgoCd;
 use crate::kubernetes_objects::job::CustomJob;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChart;
+use duration_string::DurationString;
 use k8s_openapi::api::batch::v1::Job;
 use serde::Deserialize;
 use thiserror::Error;
@@ -44,6 +46,35 @@ pub(super) struct RawCustomJob {
 
     /// Kubernetes Job YAML
     pub(super) manifest: Job,
+
+    /// Whether the job's successful completion is required to continue routine or not
+    #[serde(default = "default_required")]
+    pub(super) required: bool,
+
+    #[serde(default = "default_initial_wait")]
+    pub(super) initial_wait: DurationString,
+
+    #[serde(default = "default_max_wait")]
+    pub(super) max_wait: DurationString,
+
+    #[serde(default = "default_max_errors")]
+    pub(super) max_errors: u64,
+}
+
+const fn default_required() -> bool {
+    true
+}
+
+const fn default_initial_wait() -> DurationString {
+    DurationString::new(Duration::from_secs(600))
+}
+
+const fn default_max_wait() -> DurationString {
+    DurationString::new(Duration::from_secs(600))
+}
+
+const fn default_max_errors() -> u64 {
+    3
 }
 
 #[derive(Error, Debug)]
@@ -144,6 +175,10 @@ impl Config {
                     CustomJob {
                         dependencies: job.dependencies,
                         manifest: job.manifest,
+                        required: job.required,
+                        initial_wait: job.initial_wait.into(),
+                        max_wait: job.max_wait.into(),
+                        max_errors: job.max_errors,
                     },
                 ))
             })

@@ -5,6 +5,7 @@ mod phase_execute_job;
 mod phase_shutdown_mcproxy;
 mod phase_shutdown_mcservers;
 mod scale_statefulset;
+mod wait_until_job_finished;
 mod wait_until_pod_stopped;
 
 use std::iter;
@@ -106,9 +107,7 @@ async fn build_daily_tasks(
                     .chain(iter::once(format!("shutdown_mcserver/{}", mcserver_name)))
                     .collect::<Vec<_>>(),
                 move |ctx| {
-                    Box::pin(async move {
-                        task_execute_job(ctx, mcserver, job_name, job.manifest).await
-                    })
+                    Box::pin(async move { task_execute_job(ctx, mcserver, job_name, job).await })
                 },
             )
         })
