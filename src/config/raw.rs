@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 
 use super::Config;
 use crate::kubernetes_objects::argocd::SharedArgoCd;
+use crate::kubernetes_objects::job::CustomJob;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChart;
+use k8s_openapi::api::batch::v1::Job;
 use serde::Deserialize;
 use thiserror::Error;
 
@@ -27,6 +29,21 @@ pub(super) struct RawMinecraftChart {
 
     /// RCON Container Name
     pub(super) rcon_container: String,
+
+    /// Custom jobs that have been created after snapshot of the volumes were taken
+    #[serde(default)]
+    pub(super) jobs_after_snapshot: BTreeMap<String, RawCustomJob>,
+}
+
+#[cfg_attr(test, derive(PartialEq))]
+#[derive(Deserialize, Debug, Clone)]
+pub(super) struct RawCustomJob {
+    /// Names of jobs that must complete before this job starts
+    #[serde(default)]
+    pub(super) dependencies: Vec<String>,
+
+    /// Kubernetes Job YAML
+    pub(super) manifest: Job,
 }
 
 #[derive(Error, Debug)]
@@ -46,8 +63,14 @@ pub enum ConfigParseError {
     #[error("mcproxy must have a name defined")]
     McproxyNameMissing,
 
-    #[error("Key '{name}' must not contain '/' characters")]
-    KeyIncludesSlash { name: String },
+    #[error("mcserver key '{name}' must not contain '/' characters")]
+    McserverNameIncludesSlash { name: String },
+
+    #[error("Job name '{job_name}' in chart '{chart_name}' must not contain '/' characters")]
+    JobNameIncludesSlash {
+        chart_name: String,
+        job_name: String,
+    },
 }
 
 impl TryFrom<RawConfig> for Config {
@@ -57,28 +80,37 @@ impl TryFrom<RawConfig> for Config {
 
         for name in raw.mcservers.keys() {
             if name.contains('/') {
-                return Err(ConfigParseError::KeyIncludesSlash { name: name.clone() });
+                return Err(ConfigParseError::McserverNameIncludesSlash { name: name.clone() });
             }
         }
 
         let namespace = raw.namespace;
         let mcproxy_argocd = Self::build_argocd_hierarchy(&mut argocds, &raw.mcproxy.argocd)?;
+        let mcproxy_name = raw
+            .mcproxy
+            .name
+            .ok_or(ConfigParseError::McproxyNameMissing)?;
+        let mcproxy_jobs =
+            Self::build_jobs_after_snapshot(raw.mcproxy.jobs_after_snapshot, &mcproxy_name)?;
         let mcproxy = MinecraftChart::new(
-            raw.mcproxy
-                .name
-                .ok_or(ConfigParseError::McproxyNameMissing)?,
+            mcproxy_name,
             mcproxy_argocd,
             raw.mcproxy.rcon_container,
+            mcproxy_jobs,
         );
         let mcservers = raw
             .mcservers
             .into_iter()
             .map(|(name, server)| {
                 let server_argocd = Self::build_argocd_hierarchy(&mut argocds, &server.argocd)?;
+                let server_name = server.name.unwrap_or_else(|| name.clone());
+                let jobs_after_snapshot =
+                    Self::build_jobs_after_snapshot(server.jobs_after_snapshot, &server_name)?;
                 let mc_chart = MinecraftChart::new(
-                    server.name.unwrap_or_else(|| name.clone()),
+                    server_name,
                     server_argocd,
                     server.rcon_container,
+                    jobs_after_snapshot,
                 );
                 Ok((name, mc_chart))
             })
@@ -90,5 +122,32 @@ impl TryFrom<RawConfig> for Config {
             mcproxy,
             mcservers,
         })
+    }
+}
+
+impl Config {
+    fn build_jobs_after_snapshot(
+        raw_jobs: BTreeMap<String, RawCustomJob>,
+        chart_name: &str,
+    ) -> Result<BTreeMap<String, CustomJob>, ConfigParseError> {
+        raw_jobs
+            .into_iter()
+            .map(|(name, job)| {
+                if name.contains('/') {
+                    return Err(ConfigParseError::JobNameIncludesSlash {
+                        chart_name: chart_name.to_string(),
+                        job_name: name,
+                    });
+                }
+                Ok((
+                    name.clone(),
+                    CustomJob {
+                        name,
+                        dependencies: job.dependencies,
+                        manifest: job.manifest,
+                    },
+                ))
+            })
+            .collect()
     }
 }

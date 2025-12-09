@@ -156,6 +156,7 @@ mod tests {
                 name: Some("mcproxy".to_string()),
                 argocd: "apps/minecraft/mcproxy".to_string(),
                 rcon_container: "mcproxy".to_string(),
+                jobs_after_snapshot: BTreeMap::new(),
             },
             mcservers: BTreeMap::from([
                 (
@@ -164,6 +165,7 @@ mod tests {
                         name: Some("server1_customname".to_string()),
                         argocd: "apps/minecraft/servers/server1".to_string(),
                         rcon_container: "server1".to_string(),
+                        jobs_after_snapshot: BTreeMap::new(),
                     },
                 ),
                 (
@@ -172,6 +174,7 @@ mod tests {
                         name: None,
                         argocd: "apps/minecraft/servers/server2".to_string(),
                         rcon_container: "server2".to_string(),
+                        jobs_after_snapshot: BTreeMap::new(),
                     },
                 ),
             ]),
@@ -225,6 +228,7 @@ mcservers:
                 name: Some("mcproxy".to_string()),
                 argocd: "apps/minecraft/mcproxy".to_string(),
                 rcon_container: "mcproxy".to_string(),
+                jobs_after_snapshot: BTreeMap::new(),
             },
             mcservers: BTreeMap::from([
                 (
@@ -233,6 +237,7 @@ mcservers:
                         name: Some("server1_customname".to_string()),
                         argocd: "apps/minecraft/servers/server1".to_string(),
                         rcon_container: "server1".to_string(),
+                        jobs_after_snapshot: BTreeMap::new(),
                     },
                 ),
                 (
@@ -241,6 +246,7 @@ mcservers:
                         name: None,
                         argocd: "apps/minecraft/servers/server2".to_string(),
                         rcon_container: "server2".to_string(),
+                        jobs_after_snapshot: BTreeMap::new(),
                     },
                 ),
             ]),
