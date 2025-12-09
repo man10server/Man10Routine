@@ -17,21 +17,7 @@ use crate::scheduler::{Scheduler, Shutdown, TaskSpec};
 use self::error::DailyRoutineError;
 use self::phase_argocd_teardown::task_phase_argocd_teardown;
 use self::phase_shutdown_mcproxy::task_phase_shutdown_mcproxy;
-use self::phase_shutdown_mcservers::task_phase_shutdown_mcservers;
-
-static DAILY_TASKS: &[TaskSpec<DailyRoutineContext, DailyRoutineError>] = &[
-    TaskSpec::new("argocd_teardown", &[], task_phase_argocd_teardown),
-    TaskSpec::new(
-        "shutdown_mcproxy",
-        &["argocd_teardown"],
-        task_phase_shutdown_mcproxy,
-    ),
-    TaskSpec::new(
-        "shutdown_mcservers",
-        &["shutdown_mcproxy"],
-        task_phase_shutdown_mcservers,
-    ),
-];
+use self::phase_shutdown_mcservers::task_shutdown_mcserver;
 
 #[derive(Clone)]
 pub(crate) struct DailyRoutineContext {
@@ -52,7 +38,8 @@ impl DailyRoutineContext {
         info!("Starting daily routine...");
 
         let shutdown = Shutdown::new();
-        let scheduler = Scheduler::from_slice(DAILY_TASKS, shutdown);
+        let tasks = build_daily_tasks(self);
+        let scheduler = Scheduler::from_tasks(tasks, shutdown);
         let result = match scheduler.run(self.clone()).await {
             Ok(inner) => inner,
             Err(join_err) => Err(DailyRoutineError::TaskJoin(join_err)),
@@ -64,4 +51,33 @@ impl DailyRoutineContext {
 
         self.finalizer(result).await
     }
+}
+
+fn build_daily_tasks(
+    ctx: &DailyRoutineContext,
+) -> Vec<TaskSpec<DailyRoutineContext, DailyRoutineError>> {
+    let mut tasks = Vec::new();
+
+    tasks.push(TaskSpec::new(
+        "argocd_teardown",
+        Vec::<String>::new(),
+        task_phase_argocd_teardown,
+    ));
+
+    tasks.push(TaskSpec::new(
+        "shutdown_mcproxy",
+        vec!["argocd_teardown".to_string()],
+        task_phase_shutdown_mcproxy,
+    ));
+
+    let mut shutdown_mcserver_tasks: Vec<String> = Vec::new();
+
+    for name in ctx.config.mcservers.keys() {
+        let task_name = format!("shutdown_mcserver_{name}");
+        shutdown_mcserver_tasks.push(task_name.clone());
+
+        tasks.push(task_shutdown_mcserver(task_name, name.clone()));
+    }
+
+    tasks
 }

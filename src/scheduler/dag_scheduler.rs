@@ -7,29 +7,32 @@ use tracing::Instrument;
 use super::shutdown::Shutdown;
 
 pub type TaskFuture<E> = BoxFuture<'static, Result<(), E>>;
-pub type TaskFn<TCtx, E> = fn(TCtx) -> TaskFuture<E>;
+pub type TaskFn<TCtx, E> = Box<dyn Fn(TCtx) -> TaskFuture<E> + Send + 'static>;
 
-#[derive(Clone, Copy)]
 pub struct TaskSpec<TCtx, E> {
-    pub name: &'static str,
-    pub deps: &'static [&'static str],
+    pub name: String,
+    pub deps: Vec<String>,
     pub exec: TaskFn<TCtx, E>,
 }
 
 impl<TCtx, E> TaskSpec<TCtx, E> {
-    pub const fn new(
-        name: &'static str,
-        deps: &'static [&'static str],
-        exec: TaskFn<TCtx, E>,
+    pub fn new(
+        name: impl Into<String>,
+        deps: impl Into<Vec<String>>,
+        exec: impl Fn(TCtx) -> TaskFuture<E> + Send + 'static,
     ) -> Self {
-        Self { name, deps, exec }
+        Self {
+            name: name.into(),
+            deps: deps.into(),
+            exec: Box::new(exec),
+        }
     }
 }
 
 pub struct Scheduler<TCtx, E> {
-    tasks: HashMap<&'static str, TaskSpec<TCtx, E>>,
-    reverse_edges: HashMap<&'static str, Vec<&'static str>>,
-    indegree: HashMap<&'static str, usize>,
+    tasks: HashMap<String, TaskSpec<TCtx, E>>,
+    reverse_edges: HashMap<String, Vec<String>>,
+    indegree: HashMap<String, usize>,
     shutdown: Shutdown,
 }
 
@@ -38,31 +41,29 @@ where
     TCtx: Clone + Send + 'static,
     E: Send + 'static,
 {
-    pub fn from_slice(tasks: &'static [TaskSpec<TCtx, E>], shutdown: Shutdown) -> Self {
-        let mut tasks_map: HashMap<&'static str, TaskSpec<TCtx, E>> = HashMap::new();
-        for task in tasks {
-            if tasks_map.contains_key(task.name) {
+    pub fn from_tasks(tasks: Vec<TaskSpec<TCtx, E>>, shutdown: Shutdown) -> Self {
+        let mut tasks_map: HashMap<String, TaskSpec<TCtx, E>> = HashMap::new();
+        for task in tasks.into_iter() {
+            if tasks_map.contains_key(&task.name) {
                 panic!("Duplicate task name detected: {}", task.name);
             }
-            let spec = TaskSpec {
-                name: task.name,
-                deps: task.deps,
-                exec: task.exec,
-            };
-            tasks_map.insert(task.name, spec);
+            tasks_map.insert(task.name.clone(), task);
         }
 
-        let mut indegree: HashMap<&'static str, usize> = HashMap::new();
-        let mut reverse_edges: HashMap<&'static str, Vec<&'static str>> = HashMap::new();
+        let mut indegree: HashMap<String, usize> = HashMap::new();
+        let mut reverse_edges: HashMap<String, Vec<String>> = HashMap::new();
 
         for task in tasks_map.values() {
-            indegree.entry(task.name).or_insert(0);
-            for dep in task.deps {
+            indegree.entry(task.name.clone()).or_insert(0);
+            for dep in &task.deps {
                 if !tasks_map.contains_key(dep) {
                     panic!("Task '{}' depends on unknown task '{}'", task.name, dep);
                 }
-                reverse_edges.entry(dep).or_default().push(task.name);
-                *indegree.entry(task.name).or_insert(0) += 1;
+                reverse_edges
+                    .entry(dep.clone())
+                    .or_default()
+                    .push(task.name.clone());
+                *indegree.entry(task.name.clone()).or_insert(0) += 1;
             }
         }
 
@@ -75,13 +76,13 @@ where
     }
 
     pub async fn run(mut self, ctx: TCtx) -> Result<Result<(), E>, tokio::task::JoinError> {
-        let mut ready: VecDeque<&'static str> = self
+        let mut ready: VecDeque<String> = self
             .indegree
             .iter()
-            .filter_map(|(name, deg)| if *deg == 0 { Some(*name) } else { None })
+            .filter_map(|(name, deg)| if *deg == 0 { Some(name.clone()) } else { None })
             .collect();
 
-        let mut inflight: JoinSet<(&'static str, Result<(), E>)> = JoinSet::new();
+        let mut inflight: JoinSet<(String, Result<(), E>)> = JoinSet::new();
 
         while !ready.is_empty() || !inflight.is_empty() {
             if self.shutdown.requested() {
@@ -93,9 +94,16 @@ where
                     break;
                 }
 
-                let exec = self.tasks.get(task_name).expect("task must exist").exec;
+                let task_spec = self.tasks.remove(&task_name).expect("task must exist");
+                let exec = task_spec.exec;
                 let ctx_clone = ctx.clone();
-                inflight.spawn(async move { (task_name, exec(ctx_clone).await) }.in_current_span());
+                inflight.spawn(
+                    async move {
+                        let res = exec(ctx_clone).await;
+                        (task_name, res)
+                    }
+                    .in_current_span(),
+                );
             }
 
             let Some(joined) = inflight.join_next().await else {
@@ -108,7 +116,7 @@ where
                         return Ok(Err(e));
                     }
 
-                    if let Some(dependents) = self.reverse_edges.get(name) {
+                    if let Some(dependents) = self.reverse_edges.get(&name) {
                         for dependent_name in dependents {
                             let entry = self
                                 .indegree
@@ -116,7 +124,7 @@ where
                                 .expect("indegree should exist for dependent task");
                             *entry -= 1;
                             if *entry == 0 && !self.shutdown.requested() {
-                                ready.push_back(*dependent_name);
+                                ready.push_back(dependent_name.clone());
                             }
                         }
                     }
