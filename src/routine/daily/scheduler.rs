@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use futures::future::BoxFuture;
 use tokio::task::JoinSet;
-use tracing::warn;
+use tracing::{Instrument, warn};
 
 use super::DailyRoutineContext;
 use crate::routine::daily::error::DailyRoutineError;
@@ -85,7 +85,7 @@ impl Scheduler {
 
                 let exec = self.tasks.get(task_name).expect("task must exist").exec;
                 let ctx_clone = ctx.clone();
-                inflight.spawn(async move { (task_name, exec(ctx_clone).await) });
+                inflight.spawn(async move { (task_name, exec(ctx_clone).await) }.in_current_span());
             }
 
             let Some(joined) = inflight.join_next().await else {
