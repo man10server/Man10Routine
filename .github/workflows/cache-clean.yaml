@@ -26,20 +26,26 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const perPage = 100;
-            const maxPages = 10;
+            const maxPages = 100;
             let page = 1;
             let allCaches = [];
 
-            const isBranchExists = async branchName => {
+            const branchExistsCache = new Map();
+            const prOpenCache = new Map();
+
+            const isBranchExists = async (branchName) => {
+              if (branchExistsCache.has(branchName)) return branchExistsCache.get(branchName);
               try {
                 await github.rest.repos.getBranch({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   branch: branchName,
                 });
+                branchExistsCache.set(branchName, true);
                 return true;
               } catch (error) {
                 if (error.status === 404) {
+                  branchExistsCache.set(branchName, false);
                   return false;
                 } else {
                   throw error;
@@ -47,7 +53,26 @@ jobs:
               }
             };
 
-            const getBranchNameFromRef = ref => ref.split('/').slice(2).join('/');
+            const isPullRequestOpen = async (pullNumber) => {
+              if (prOpenCache.has(pullNumber)) return prOpenCache.get(pullNumber);
+              try {
+                const { data } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pullNumber,
+                });
+                const isOpen = data.state === 'open';
+                prOpenCache.set(pullNumber, isOpen);
+                return isOpen;
+              } catch (error) {
+                if (error.status === 404) {
+                  prOpenCache.set(pullNumber, false);
+                  return false;
+                } else {
+                  throw error;
+                }
+              }
+            };
 
             while (page <= maxPages) {
               const response = await github.rest.actions.getActionsCacheList({
@@ -59,9 +84,7 @@ jobs:
 
               allCaches = allCaches.concat(response.data.actions_caches);
 
-              if (response.data.actions_caches.length < perPage) {
-                break;
-              }
+              if (response.data.actions_caches.length < perPage) break;
               page++;
             }
 
@@ -74,27 +97,65 @@ jobs:
 
             for (const cache of allCaches) {
               const ref = cache.ref;
+              let shouldDelete = false;
+              let reason = '';
+
               if (!ref) {
-                console.log(`Cache ${cache.id} has no ref; deleting...`);
+                shouldDelete = true;
+                reason = 'no ref';
               } else {
-                if (ref === 'refs/heads/main') {
-                  continue;
+                const parts = ref.split('/');
+                if (parts.length >= 3 && parts[1] === 'heads') {
+                  const branch = parts.slice(2).join('/');
+                  if (ref === 'refs/heads/main') {
+                    shouldDelete = false;
+                    reason = `branch "${branch}" is protected (kept)`;
+                  } else if (await isBranchExists(branch)) {
+                    shouldDelete = false;
+                    reason = `branch "${branch}" still exists (kept)`;
+                  } else {
+                    shouldDelete = true;
+                    reason = `branch "${branch}" no longer exists`;
+                  }
+                } else if (parts.length >= 3 && parts[1] === 'pull') {
+                  const pullNumber = Number(parts[2]);
+                  if (Number.isInteger(pullNumber)) {
+                    if (await isPullRequestOpen(pullNumber)) {
+                      shouldDelete = false;
+                      reason = `pull request #${pullNumber} is still open (kept)`;
+                    } else {
+                      shouldDelete = true;
+                      reason = `pull request #${pullNumber} is not open`;
+                    }
+                  } else {
+                    shouldDelete = true;
+                    reason = `invalid pull number in ref "${ref}"`;
+                  }
+                } else {
+                  shouldDelete = true;
+                  reason = `non-branch/non-PR ref "${ref}"`;
                 }
-                const branch = getBranchNameFromRef(ref);
-                if (await isBranchExists(branch)) {
-                  continue;
-                }
-                console.log(`Branch ${branch} no longer exists. deleting cache...`);
               }
 
-              if (dryRun) {
-                console.log(`[dry-run] Cache for key "${cache.key}" (ID: ${cache.id}) would be deleted.`);
+              if (shouldDelete) {
+                console.log(`Cache ${cache.id} (key: "${cache.key}") marked for deletion: ${reason}.`);
+                if (!dryRun) {
+                  console.log(`Deleting cache for key "${cache.key}" (ID: ${cache.id}).`);
+                  try {
+                    await github.rest.actions.deleteActionsCacheById({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      cache_id: cache.id,
+                    });
+                  } catch (error) {
+                    if (error.status === 404) {
+                      console.log(`Cache ID ${cache.id} already deleted (404). Skipping.`);
+                    } else {
+                      console.warn(`Failed to delete cache ID ${cache.id}: ${error.status} ${error.message}`);
+                    }
+                  }
+                }
               } else {
-                console.log(`Deleting cache for key "${cache.key}" (ID: ${cache.id}).`);
-                await github.rest.actions.deleteActionsCacheById({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  cache_id: cache.id,
-                });
+                console.log(`Cache ${cache.id} (key: "${cache.key}") kept: ${reason}.`);
               }
             }
