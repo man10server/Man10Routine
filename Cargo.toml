@@ -14,7 +14,7 @@ k8s-openapi = { version = "0.26.0", features = ["v1_33"] }
 kcr_argoproj_io = "2.20251113.194744"
 serde_json = "1.0.145"
 derive-debug = "0.1.2"
-toml = "0.9.8"
+serde_yaml = "0.9.34"
 tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 tracing-error = { version = "0.2.1", features = ["traced-error"] }

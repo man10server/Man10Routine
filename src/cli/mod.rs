@@ -13,7 +13,7 @@ pub(crate) struct Cli {
 
     #[clap(
         long = "config",
-        default_value = "/etc/man10routine/config.toml",
+        default_value = "/etc/man10routine/config.yaml",
         global = true
     )]
     pub(crate) config: PathBuf,

@@ -7,29 +7,29 @@ Safely executes regularly scheduled jobs.
 
 ## Usage
 ### Config file
-```toml
-namespace = "default"
+```yaml
+namespace: "default"
 
-[mcproxy]
-name = "mcproxy-dan5"
-argocd = "apps/minecraft/mcproxy-dan5"
-container = "mcproxy"
+mcproxy:
+  name: "mcproxy-dan5"
+  argocd: "apps/minecraft/mcproxy-dan5"
+  rcon_container: "mcproxy"
 
-[mcservers.lobby]
-name = "mcserver-lobby"
-argocd = "apps/minecraft/mcserver-lobby"
-container = "mcserver"
-
-[mcservers.shigen]
-name = "mcserver-shigen"
-argocd = "apps/minecraft/mcserver-shigen"
-container = "mcserver"
-shigen = true
+mcservers:
+  lobby:
+    name: "mcserver-lobby"
+    argocd: "apps/minecraft/mcserver-lobby"
+    rcon_container: "mcserver"
+  shigen:
+    name: "mcserver-shigen"
+    argocd: "apps/minecraft/mcserver-shigen"
+    rcon_container: "mcserver"
+    shigen: true
 ```
 
 ### Command
 ```sh
-man10_routine --config /etc/man10routine/config.toml daily
+man10_routine --config /etc/man10routine/config.yaml daily
 ```
 Do daily tasks:
   - Restart servers gracefully

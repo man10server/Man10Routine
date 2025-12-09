@@ -45,7 +45,7 @@ pub enum ConfigLoadError {
     ContentInvalid(PathBuf, ConfigParseError),
 
     #[error("Config file {0} is not serializable: {1}")]
-    ContentUnserializable(PathBuf, toml::de::Error),
+    ContentUnserializable(PathBuf, serde_yaml::Error),
 
     #[error("Config file {0} cannot be read: {1}")]
     FailedToRead(PathBuf, io::Error),
@@ -57,7 +57,7 @@ impl Config {
             .await
             .map_err(|e| ConfigLoadError::FailedToRead(path.clone(), e))?;
 
-        let raw_config: RawConfig = toml::from_str(&source_string)
+        let raw_config: RawConfig = serde_yaml::from_str(&source_string)
             .map_err(|e| ConfigLoadError::ContentUnserializable(path.clone(), e))?;
 
         let config = Self::try_from(raw_config)
@@ -236,10 +236,7 @@ mod tests {
             ]),
         };
 
-        let config = match Config::try_from(raw) {
-            Ok(cfg) => cfg,
-            Err(e) => panic!("Config parse failed: {}", e),
-        };
+        let config = Config::try_from(raw).expect("Config parse failed");
         assert_eq!(config.namespace, "default");
         assert_eq!(config.argocds.len(), 6);
         {
@@ -261,5 +258,59 @@ mod tests {
             );
             assert_eq!(server_1_argocd.try_read().unwrap().name, "server1");
         }
+    }
+
+    #[test]
+    fn test_rawconfig_from_yaml() {
+        let raw_yaml = r#"
+namespace: "default"
+mcproxy:
+  name: "mcproxy"
+  argocd: "apps/minecraft/mcproxy"
+  rcon_container: "mcproxy"
+mcservers:
+  server1:
+    name: "server1_customname"
+    argocd: "apps/minecraft/servers/server1"
+    rcon_container: "server1"
+  server2:
+    argocd: "apps/minecraft/servers/server2"
+    rcon_container: "server2"
+    shigen: true
+"#;
+
+        let raw: RawConfig = serde_yaml::from_str(raw_yaml).expect("YAML should deserialize");
+
+        let expected = RawConfig {
+            namespace: "default".to_string(),
+            mcproxy: raw::RawMinecraftChart {
+                name: Some("mcproxy".to_string()),
+                argocd: "apps/minecraft/mcproxy".to_string(),
+                rcon_container: "mcproxy".to_string(),
+                shigen: false,
+            },
+            mcservers: BTreeMap::from([
+                (
+                    "server1".to_string(),
+                    raw::RawMinecraftChart {
+                        name: Some("server1_customname".to_string()),
+                        argocd: "apps/minecraft/servers/server1".to_string(),
+                        rcon_container: "server1".to_string(),
+                        shigen: false,
+                    },
+                ),
+                (
+                    "server2".to_string(),
+                    raw::RawMinecraftChart {
+                        name: None,
+                        argocd: "apps/minecraft/servers/server2".to_string(),
+                        rcon_container: "server2".to_string(),
+                        shigen: true,
+                    },
+                ),
+            ]),
+        };
+
+        assert_eq!(raw, expected);
     }
 }
