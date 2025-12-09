@@ -21,14 +21,6 @@ pub(super) struct RawMinecraftChart {
     /// Example: "apps/minecraft/mcserver-man10"
     pub(super) argocd: String,
 
-    /// Whether to use Shigen or not
-    #[serde(default = "default_shigen")]
-    pub(super) shigen: bool,
-
     /// RCON Container Name
     pub(super) rcon_container: String,
-}
-
-const fn default_shigen() -> bool {
-    false
 }

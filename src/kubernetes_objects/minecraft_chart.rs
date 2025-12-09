@@ -20,9 +20,6 @@ pub(crate) struct MinecraftChart {
     /// ArgoCD Application
     pub(crate) argocd: WeakArgoCd,
 
-    /// Whether to use Shigen or not
-    pub(crate) shigen: bool,
-
     /// RCON Container name
     pub(crate) rcon_container: String,
 
@@ -47,13 +44,11 @@ impl MinecraftChart {
     pub(crate) fn new(
         name: String,
         argocd: WeakArgoCd,
-        shigen: bool,
         rcon_container: String,
     ) -> SharedMinecraftChart {
         Arc::new(RwLock::new(MinecraftChart {
             name,
             argocd,
-            shigen,
             rcon_container,
             argocd_tear: None,
         }))

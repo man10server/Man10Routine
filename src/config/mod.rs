@@ -171,7 +171,6 @@ impl TryFrom<RawConfig> for Config {
                 .name
                 .ok_or(ConfigParseError::McproxyNameMissing)?,
             mcproxy_argocd,
-            raw.mcproxy.shigen,
             raw.mcproxy.rcon_container,
         );
         let mcservers = raw
@@ -182,7 +181,6 @@ impl TryFrom<RawConfig> for Config {
                 let mc_chart = MinecraftChart::new(
                     server.name.unwrap_or_else(|| name.clone()),
                     server_argocd,
-                    server.shigen,
                     server.rcon_container,
                 );
                 Ok((name, mc_chart))
@@ -212,7 +210,6 @@ mod tests {
                 name: Some("mcproxy".to_string()),
                 argocd: "apps/minecraft/mcproxy".to_string(),
                 rcon_container: "mcproxy".to_string(),
-                shigen: false,
             },
             mcservers: BTreeMap::from([
                 (
@@ -221,7 +218,6 @@ mod tests {
                         name: Some("server1_customname".to_string()),
                         argocd: "apps/minecraft/servers/server1".to_string(),
                         rcon_container: "server1".to_string(),
-                        shigen: false,
                     },
                 ),
                 (
@@ -230,7 +226,6 @@ mod tests {
                         name: None,
                         argocd: "apps/minecraft/servers/server2".to_string(),
                         rcon_container: "server2".to_string(),
-                        shigen: true,
                     },
                 ),
             ]),
@@ -242,12 +237,10 @@ mod tests {
         {
             let server_1 = config.mcservers.get("server1").unwrap().try_read().unwrap();
             assert_eq!(server_1.name, "server1_customname");
-            assert!(!server_1.shigen);
         }
         {
             let server_2 = config.mcservers.get("server2").unwrap().try_read().unwrap();
             assert_eq!(server_2.name, "server2");
-            assert!(server_2.shigen);
         }
         {
             let server_1 = config.mcservers.get("server1").unwrap().try_read().unwrap();
@@ -276,7 +269,6 @@ mcservers:
   server2:
     argocd: "apps/minecraft/servers/server2"
     rcon_container: "server2"
-    shigen: true
 "#;
 
         let raw: RawConfig = serde_yaml::from_str(raw_yaml).expect("YAML should deserialize");
@@ -287,7 +279,6 @@ mcservers:
                 name: Some("mcproxy".to_string()),
                 argocd: "apps/minecraft/mcproxy".to_string(),
                 rcon_container: "mcproxy".to_string(),
-                shigen: false,
             },
             mcservers: BTreeMap::from([
                 (
@@ -296,7 +287,6 @@ mcservers:
                         name: Some("server1_customname".to_string()),
                         argocd: "apps/minecraft/servers/server1".to_string(),
                         rcon_container: "server1".to_string(),
-                        shigen: false,
                     },
                 ),
                 (
@@ -305,7 +295,6 @@ mcservers:
                         name: None,
                         argocd: "apps/minecraft/servers/server2".to_string(),
                         rcon_container: "server2".to_string(),
-                        shigen: true,
                     },
                 ),
             ]),
