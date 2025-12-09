@@ -19,6 +19,9 @@ pub enum DailyRoutineError {
 
     #[error("Kubernetes client error: {0}")]
     KubeClient(#[from] SpannedErr<kube::Error>),
+
+    #[error("Task join error: {0}")]
+    TaskJoin(#[from] tokio::task::JoinError),
 }
 
 #[derive(Error, Debug)]
@@ -43,6 +46,7 @@ impl ExtractSpanTrace for DailyRoutineError {
             DailyRoutineError::MinecraftChart(e) => e.span_trace(),
             DailyRoutineError::ShutdownMinecraftServer(_, e) => e.span_trace(),
             DailyRoutineError::KubeClient(e) => e.span_trace(),
+            DailyRoutineError::TaskJoin(_) => None,
         }
     }
 }
