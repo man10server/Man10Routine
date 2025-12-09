@@ -6,9 +6,10 @@ use std::iter;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+pub use self::raw::ConfigParseError;
 use self::raw::RawConfig;
 use crate::kubernetes_objects::argocd::{ArgoCd, SharedArgoCd, WeakArgoCd};
-use crate::kubernetes_objects::minecraft_chart::{MinecraftChart, SharedMinecraftChart};
+use crate::kubernetes_objects::minecraft_chart::SharedMinecraftChart;
 use thiserror::Error;
 use tokio::fs::read_to_string;
 use tokio::io;
@@ -19,24 +20,6 @@ pub(crate) struct Config {
     pub(crate) argocds: BTreeMap<String, SharedArgoCd>,
     pub(crate) mcproxy: SharedMinecraftChart,
     pub(crate) mcservers: BTreeMap<String, SharedMinecraftChart>,
-}
-
-#[derive(Error, Debug)]
-pub enum ConfigParseError {
-    #[error(
-        "Parent mismatch for ArgoCD app '{name}': first defined parent '{first_parent}', but afterwards defined parent '{second_parent}'"
-    )]
-    ArgoCdParentMismatch {
-        name: String,
-        first_parent: String,
-        second_parent: String,
-    },
-
-    #[error("ArgoCD app '{name}' has multiple minecraft charts assigned")]
-    ArgoCdHasMultipleCharts { name: String },
-
-    #[error("mcproxy must have a name defined")]
-    McproxyNameMissing,
 }
 
 #[derive(Error, Debug)]
@@ -156,43 +139,6 @@ impl Config {
         }
 
         Self::insert_argocd_application(argocds, rest.iter().last().copied(), last)
-    }
-}
-
-impl TryFrom<RawConfig> for Config {
-    type Error = ConfigParseError;
-    fn try_from(raw: RawConfig) -> Result<Self, Self::Error> {
-        let mut argocds: BTreeMap<String, SharedArgoCd> = BTreeMap::new();
-
-        let namespace = raw.namespace;
-        let mcproxy_argocd = Self::build_argocd_hierarchy(&mut argocds, &raw.mcproxy.argocd)?;
-        let mcproxy = MinecraftChart::new(
-            raw.mcproxy
-                .name
-                .ok_or(ConfigParseError::McproxyNameMissing)?,
-            mcproxy_argocd,
-            raw.mcproxy.rcon_container,
-        );
-        let mcservers = raw
-            .mcservers
-            .into_iter()
-            .map(|(name, server)| {
-                let server_argocd = Self::build_argocd_hierarchy(&mut argocds, &server.argocd)?;
-                let mc_chart = MinecraftChart::new(
-                    server.name.unwrap_or_else(|| name.clone()),
-                    server_argocd,
-                    server.rcon_container,
-                );
-                Ok((name, mc_chart))
-            })
-            .collect::<Result<BTreeMap<_, _>, ConfigParseError>>()?;
-
-        Ok(Config {
-            namespace,
-            argocds,
-            mcproxy,
-            mcservers,
-        })
     }
 }
 
