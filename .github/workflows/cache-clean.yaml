@@ -30,16 +30,24 @@ jobs:
             let page = 1;
             let allCaches = [];
 
+            const branchExistsCache = new Map();
+            const prExistsCache = new Map();
+
             const isBranchExists = async (branchName) => {
+              if (branchExistsCache.has(branchName)) {
+                return branchExistsCache.get(branchName);
+              }
               try {
                 await github.rest.repos.getBranch({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   branch: branchName,
                 });
+                branchExistsCache.set(branchName, true);
                 return true;
               } catch (error) {
                 if (error.status === 404) {
+                  branchExistsCache.set(branchName, false);
                   return false;
                 } else {
                   throw error;
@@ -48,15 +56,20 @@ jobs:
             };
 
             const isPullRequestExists = async (pullNumber) => {
+              if (prExistsCache.has(pullNumber)) {
+                return prExistsCache.get(pullNumber);
+              }
               try {
                 await github.rest.pulls.get({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   pull_number: pullNumber,
                 });
+                prExistsCache.set(pullNumber, true);
                 return true;
               } catch (error) {
                 if (error.status === 404) {
+                  prExistsCache.set(pullNumber, false);
                   return false;
                 } else {
                   throw error;
