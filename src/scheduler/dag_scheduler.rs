@@ -2,38 +2,40 @@ use std::collections::{HashMap, VecDeque};
 
 use futures::future::BoxFuture;
 use tokio::task::JoinSet;
-use tracing::{Instrument, warn};
+use tracing::Instrument;
 
-use super::DailyRoutineContext;
-use crate::routine::daily::error::DailyRoutineError;
-use crate::routine::daily::shutdown::Shutdown;
+use super::shutdown::Shutdown;
 
-pub(crate) type TaskFuture = BoxFuture<'static, Result<(), DailyRoutineError>>;
-pub(crate) type TaskFn = fn(DailyRoutineContext) -> TaskFuture;
+pub type TaskFuture<E> = BoxFuture<'static, Result<(), E>>;
+pub type TaskFn<TCtx, E> = fn(TCtx) -> TaskFuture<E>;
 
 #[derive(Clone, Copy)]
-pub(crate) struct TaskSpec {
-    pub(crate) name: &'static str,
-    pub(crate) deps: &'static [&'static str],
-    pub(crate) exec: TaskFn,
+pub struct TaskSpec<TCtx, E> {
+    pub name: &'static str,
+    pub deps: &'static [&'static str],
+    pub exec: TaskFn<TCtx, E>,
 }
 
-impl TaskSpec {
-    pub(crate) fn new(name: &'static str, deps: &'static [&'static str], exec: TaskFn) -> Self {
+impl<TCtx, E> TaskSpec<TCtx, E> {
+    pub fn new(name: &'static str, deps: &'static [&'static str], exec: TaskFn<TCtx, E>) -> Self {
         Self { name, deps, exec }
     }
 }
 
-pub(crate) struct Scheduler {
-    tasks: HashMap<&'static str, TaskSpec>,
+pub struct Scheduler<TCtx, E> {
+    tasks: HashMap<&'static str, TaskSpec<TCtx, E>>,
     reverse_edges: HashMap<&'static str, Vec<&'static str>>,
     indegree: HashMap<&'static str, usize>,
     shutdown: Shutdown,
 }
 
-impl Scheduler {
-    pub(crate) fn new(tasks: Vec<TaskSpec>, shutdown: Shutdown) -> Self {
-        let mut tasks_map: HashMap<&'static str, TaskSpec> = HashMap::new();
+impl<TCtx, E> Scheduler<TCtx, E>
+where
+    TCtx: Clone + Send + 'static,
+    E: Send + 'static,
+{
+    pub fn new(tasks: Vec<TaskSpec<TCtx, E>>, shutdown: Shutdown) -> Self {
+        let mut tasks_map: HashMap<&'static str, TaskSpec<TCtx, E>> = HashMap::new();
         for task in tasks {
             if tasks_map.contains_key(task.name) {
                 panic!("Duplicate task name detected: {}", task.name);
@@ -63,18 +65,17 @@ impl Scheduler {
         }
     }
 
-    pub(crate) async fn run(mut self, ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
+    pub async fn run(mut self, ctx: TCtx) -> Result<Result<(), E>, tokio::task::JoinError> {
         let mut ready: VecDeque<&'static str> = self
             .indegree
             .iter()
             .filter_map(|(name, deg)| if *deg == 0 { Some(*name) } else { None })
             .collect();
 
-        let mut inflight: JoinSet<(&'static str, Result<(), DailyRoutineError>)> = JoinSet::new();
+        let mut inflight: JoinSet<(&'static str, Result<(), E>)> = JoinSet::new();
 
         while !ready.is_empty() || !inflight.is_empty() {
             if self.shutdown.requested() {
-                // Stop scheduling new tasks once shutdown is requested.
                 ready.clear();
             }
 
@@ -94,7 +95,9 @@ impl Scheduler {
 
             match joined {
                 Ok((name, res)) => {
-                    res?;
+                    if let Err(e) = res {
+                        return Ok(Err(e));
+                    }
 
                     if let Some(dependents) = self.reverse_edges.get(name) {
                         for dependent_name in dependents {
@@ -109,13 +112,10 @@ impl Scheduler {
                         }
                     }
                 }
-                Err(join_err) => {
-                    warn!("A task panicked or was cancelled: {}", join_err);
-                    return Err(DailyRoutineError::TaskJoin(join_err));
-                }
+                Err(join_err) => return Err(join_err),
             }
         }
 
-        Ok(())
+        Ok(Ok(()))
     }
 }

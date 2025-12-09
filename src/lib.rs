@@ -11,6 +11,7 @@ pub mod config;
 pub mod error;
 pub mod kubernetes_objects;
 pub(crate) mod routine;
+pub mod scheduler;
 
 #[derive(Error, Debug)]
 pub enum AppError {

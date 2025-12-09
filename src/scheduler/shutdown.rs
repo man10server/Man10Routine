@@ -4,19 +4,25 @@ use tokio::signal;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
-pub(super) struct Shutdown {
+pub struct Shutdown {
     rx: watch::Receiver<Option<&'static str>>,
 }
 
 impl Shutdown {
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             rx: spawn_shutdown_listener(),
         }
     }
 
-    pub(super) fn requested(&self) -> bool {
+    pub fn requested(&self) -> bool {
         self.rx.borrow().is_some()
+    }
+}
+
+impl Default for Shutdown {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

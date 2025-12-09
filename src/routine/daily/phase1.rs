@@ -1,5 +1,5 @@
 use super::DailyRoutineContext;
-use crate::routine::daily::scheduler::TaskFuture;
+use crate::scheduler::TaskFuture;
 
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -47,6 +47,6 @@ async fn phase1(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
     Ok(())
 }
 
-pub(crate) fn task_phase1(ctx: DailyRoutineContext) -> TaskFuture {
+pub(crate) fn task_phase1(ctx: DailyRoutineContext) -> TaskFuture<DailyRoutineError> {
     Box::pin(phase1(ctx))
 }

@@ -2,7 +2,7 @@ use super::DailyRoutineContext;
 use super::scale_statefulset::scale_statefulset_to_zero;
 use super::wait_until_pod_stopped::wait_until_pod_stopped;
 use crate::routine::daily::error::DailyRoutineError;
-use crate::routine::daily::scheduler::TaskFuture;
+use crate::scheduler::TaskFuture;
 use std::time::Duration;
 
 use futures::StreamExt;
@@ -137,6 +137,6 @@ async fn phase3(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {
     Ok(())
 }
 
-pub(crate) fn task_phase3(ctx: DailyRoutineContext) -> TaskFuture {
+pub(crate) fn task_phase3(ctx: DailyRoutineContext) -> TaskFuture<DailyRoutineError> {
     Box::pin(phase3(ctx))
 }

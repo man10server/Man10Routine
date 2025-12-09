@@ -1,5 +1,5 @@
 use super::DailyRoutineContext;
-use crate::routine::daily::scheduler::TaskFuture;
+use crate::scheduler::TaskFuture;
 
 use std::time::Duration;
 
@@ -34,6 +34,6 @@ async fn phase2(ctx: DailyRoutineContext) -> Result<(), super::error::DailyRouti
     Ok(())
 }
 
-pub(crate) fn task_phase2(ctx: DailyRoutineContext) -> TaskFuture {
+pub(crate) fn task_phase2(ctx: DailyRoutineContext) -> TaskFuture<super::error::DailyRoutineError> {
     Box::pin(phase2(ctx))
 }
