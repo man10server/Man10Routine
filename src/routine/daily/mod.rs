@@ -4,9 +4,6 @@ mod phase_argocd_teardown;
 mod phase_execute_job;
 mod phase_shutdown_mcproxy;
 mod phase_shutdown_mcservers;
-mod scale_statefulset;
-mod wait_until_job_finished;
-mod wait_until_pod_stopped;
 
 use std::iter;
 use std::sync::Arc;

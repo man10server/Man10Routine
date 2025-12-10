@@ -9,7 +9,7 @@ use tracing_error::{ExtractSpanTrace, SpanTrace};
 
 use super::argocd::tearing::TearingArgoCdGuard;
 use super::argocd::{ArgoCdError, WeakArgoCd};
-use super::job::CustomJob;
+use super::custom_job::CustomJob;
 
 pub(crate) type SharedMinecraftChart = Arc<RwLock<MinecraftChart>>;
 pub(crate) type WeakMinecraftChart = Weak<RwLock<MinecraftChart>>;

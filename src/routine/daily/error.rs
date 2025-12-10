@@ -4,7 +4,9 @@ use tracing_error::{ExtractSpanTrace, SpanTrace};
 
 use crate::error::SpannedErr;
 use crate::kubernetes_objects::argocd::ArgoCdError;
+use crate::kubernetes_objects::job::WaitJobFinishedError;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChartError;
+use crate::kubernetes_objects::statefulset::StatefulSetScaleError;
 use crate::scheduler::InvalidDagError;
 
 #[derive(Error, Debug)]
@@ -16,7 +18,7 @@ pub enum DailyRoutineError {
     MinecraftChart(#[from] MinecraftChartError),
 
     #[error("Minecraft Server {0} cannot be shutdown: {1}")]
-    ShutdownMinecraftServer(String, SpannedErr<ShutdownMinecraftServerError>),
+    ShutdownMinecraftServer(String, StatefulSetScaleError),
 
     #[error("Job {0} cannot be finished: {1}")]
     WaitJobFinished(String, SpannedErr<WaitJobFinishedError>),
@@ -32,27 +34,6 @@ pub enum DailyRoutineError {
 
     #[error("Invalid task DAG: {0}")]
     InvalidTaskDag(#[from] SpannedErr<InvalidDagError>),
-}
-
-#[derive(Error, Debug)]
-pub enum ShutdownMinecraftServerError {
-    #[error("Kubernetes client error: {0}")]
-    KubeClient(kube::Error),
-
-    #[error("Exec command error: {0}")]
-    Exec(#[source] Box<dyn std::error::Error + Send + Sync>),
-
-    #[error("Failed to scale Statefulset: the statefulset has no 'replicas' field")]
-    StatefulSetNoReplicas,
-
-    #[error("Pod did not shutdown within {0} seconds timeout")]
-    PodShutdownCheckTimeout(u64),
-}
-
-#[derive(Error, Debug)]
-pub enum WaitJobFinishedError {
-    #[error("Job did not finish within {0} seconds timeout")]
-    JobCompletionCheckTimeout(u64),
 }
 
 impl ExtractSpanTrace for DailyRoutineError {
