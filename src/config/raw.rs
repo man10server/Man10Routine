@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use super::polling::PollingConfig;
 use super::Config;
+use super::polling::PollingConfig;
 use crate::kubernetes_objects::argocd::SharedArgoCd;
 use crate::kubernetes_objects::custom_job::CustomJob;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChart;

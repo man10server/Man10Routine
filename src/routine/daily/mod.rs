@@ -2,10 +2,10 @@ pub mod error;
 mod finalizer;
 mod phase_argocd_teardown;
 mod phase_execute_job;
+mod phase_relaunch_mcproxy;
+mod phase_relaunch_mcserver;
 mod phase_shutdown_mcproxy;
 mod phase_shutdown_mcservers;
-mod phase_relaunch_mcserver;
-mod phase_relaunch_mcproxy;
 
 use std::iter;
 use std::sync::Arc;
@@ -148,10 +148,10 @@ async fn build_daily_tasks(
         stream::iter(ctx.config.mcservers.iter())
             .filter(|(_, mcserver)| async { mcserver.read().await.required_to_start })
             .map(|(name, _)| format!("relaunch_mcserver/{}", name))
-            .chain(stream::once(future::ready("shutdown_mcproxy".to_string() )))
+            .chain(stream::once(future::ready("shutdown_mcproxy".to_string())))
             .collect::<Vec<_>>()
             .await,
-        move |ctx| task_phase_relaunch_mcproxy(ctx),    
+        move |ctx| task_phase_relaunch_mcproxy(ctx),
     ));
 
     tasks

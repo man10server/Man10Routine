@@ -1,15 +1,16 @@
 use std::time::Duration;
 
-use tracing::{error, info, instrument, trace_span, Instrument};
+use tracing::{Instrument, error, info, instrument, trace_span};
 
 use crate::config::polling::PollingConfig;
 use crate::kubernetes_objects::minecraft_chart::WeakMinecraftChart;
-use crate::kubernetes_objects::statefulset::{scale_statefulset_to_zero, wait_until_statefulset_scaled, StatefulSetScaleError};
+use crate::kubernetes_objects::statefulset::{
+    StatefulSetScaleError, scale_statefulset_to_zero, wait_until_statefulset_scaled,
+};
 use crate::scheduler::TaskFuture;
 
-use super::error::DailyRoutineError;
 use super::DailyRoutineContext;
-
+use super::error::DailyRoutineError;
 
 #[instrument("phase_relaunch_mcserver", skip_all)]
 async fn relaunch_mcserver(
@@ -25,7 +26,6 @@ async fn relaunch_mcserver(
     let (mcserver_name, sts_name, rcon_container) =
         { (&read.name, &read.name, &read.rcon_container) };
 
-
     let span = trace_span!(
         "relaunch_mcserver",
         kubernetes_namespace = %namespace,
@@ -38,9 +38,7 @@ async fn relaunch_mcserver(
         let result: Result<(), DailyRoutineError> = async {
             scale_statefulset_to_zero(client.clone(), &namespace, sts_name, 1)
                 .await
-                .map_err(|e| {
-                    DailyRoutineError::RelaunchMinecraftServer(sts_name.clone(), e)
-                })?;
+                .map_err(|e| DailyRoutineError::RelaunchMinecraftServer(sts_name.clone(), e))?;
 
             wait_until_statefulset_scaled(
                 client.clone(),
@@ -55,10 +53,8 @@ async fn relaunch_mcserver(
                 },
             )
             .await
-                .map_err(|e| {
-                    StatefulSetScaleError::StatefulSetNotScaled(sts_name.clone(), e)
-                })
-                .map_err(|e| DailyRoutineError::ShutdownMinecraftServer(sts_name.clone(), e))?;
+            .map_err(|e| StatefulSetScaleError::StatefulSetNotScaled(sts_name.clone(), e))
+            .map_err(|e| DailyRoutineError::ShutdownMinecraftServer(sts_name.clone(), e))?;
 
             Ok(())
         }
@@ -82,7 +78,7 @@ async fn relaunch_mcserver(
     .instrument(span)
     .await
 }
-    
+
 pub(crate) fn task_relaunch_mcserver(
     ctx: DailyRoutineContext,
     mcserver: WeakMinecraftChart,

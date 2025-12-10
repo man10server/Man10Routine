@@ -183,7 +183,10 @@ pub(crate) async fn wait_until_statefulset_scaled(
                 break Err(WaitStatefulSetScaleError::StatefulSetHasNoStatus).with_span_trace();
             }
             Err(e) => {
-                warn!("Error while checking statefulset '{}': {}", statefulset_name, e);
+                warn!(
+                    "Error while checking statefulset '{}': {}",
+                    statefulset_name, e
+                );
                 warn!(
                     "Waiting another {} seconds before retrying...",
                     polling_config.error_wait.as_secs()
