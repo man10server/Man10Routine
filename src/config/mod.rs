@@ -158,6 +158,7 @@ mod tests {
                 argocd: "apps/minecraft/mcproxy".to_string(),
                 rcon_container: "mcproxy".to_string(),
                 jobs_after_snapshot: BTreeMap::new(),
+                required_to_start: None,
             },
             mcservers: BTreeMap::from([
                 (
@@ -167,6 +168,7 @@ mod tests {
                         argocd: "apps/minecraft/servers/server1".to_string(),
                         rcon_container: "server1".to_string(),
                         jobs_after_snapshot: BTreeMap::new(),
+                        required_to_start: None,
                     },
                 ),
                 (
@@ -176,6 +178,7 @@ mod tests {
                         argocd: "apps/minecraft/servers/server2".to_string(),
                         rcon_container: "server2".to_string(),
                         jobs_after_snapshot: BTreeMap::new(),
+                        required_to_start: Some(false),
                     },
                 ),
             ]),
@@ -187,10 +190,12 @@ mod tests {
         {
             let server_1 = config.mcservers.get("server1").unwrap().try_read().unwrap();
             assert_eq!(server_1.name, "server1_customname");
+            assert!(server_1.required_to_start);
         }
         {
             let server_2 = config.mcservers.get("server2").unwrap().try_read().unwrap();
             assert_eq!(server_2.name, "server2");
+            assert!(!server_2.required_to_start);
         }
         {
             let server_1 = config.mcservers.get("server1").unwrap().try_read().unwrap();
@@ -230,6 +235,7 @@ mcservers:
                 argocd: "apps/minecraft/mcproxy".to_string(),
                 rcon_container: "mcproxy".to_string(),
                 jobs_after_snapshot: BTreeMap::new(),
+                required_to_start: None,
             },
             mcservers: BTreeMap::from([
                 (
@@ -239,6 +245,7 @@ mcservers:
                         argocd: "apps/minecraft/servers/server1".to_string(),
                         rcon_container: "server1".to_string(),
                         jobs_after_snapshot: BTreeMap::new(),
+                        required_to_start: None,
                     },
                 ),
                 (
@@ -248,6 +255,7 @@ mcservers:
                         argocd: "apps/minecraft/servers/server2".to_string(),
                         rcon_container: "server2".to_string(),
                         jobs_after_snapshot: BTreeMap::new(),
+                        required_to_start: None,
                     },
                 ),
             ]),
