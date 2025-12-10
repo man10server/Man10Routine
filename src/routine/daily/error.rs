@@ -4,11 +4,10 @@ use tracing_error::{ExtractSpanTrace, SpanTrace};
 
 use crate::error::SpannedErr;
 use crate::kubernetes_objects::argocd::ArgoCdError;
+use crate::kubernetes_objects::job::WaitJobFinishedError;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChartError;
+use crate::kubernetes_objects::statefulset::StatefulSetScaleError;
 use crate::scheduler::InvalidDagError;
-
-use super::wait_until_job_finished::WaitJobFinishedError;
-use super::wait_until_statefulset_scaled::WaitStatefulSetScaleError;
 
 #[derive(Error, Debug)]
 pub enum DailyRoutineError {
@@ -35,32 +34,6 @@ pub enum DailyRoutineError {
 
     #[error("Invalid task DAG: {0}")]
     InvalidTaskDag(#[from] SpannedErr<InvalidDagError>),
-}
-
-#[derive(Error, Debug)]
-pub enum StatefulSetScaleError {
-    #[error("Kubernetes client error: {0}")]
-    KubeClient(SpannedErr<kube::Error>),
-
-    #[error("Exec command error: {0}")]
-    Exec(SpannedErr<Box<dyn std::error::Error + Send + Sync + 'static>>),
-
-    #[error("StatefulSet has no 'replicas' field")]
-    StatefulSetHasNoReplicas(SpanTrace),
-
-    #[error("Statefulset {0} cannot be scaled")]
-    StatefulSetNotScaled(String, SpannedErr<WaitStatefulSetScaleError>),
-}
-
-impl ExtractSpanTrace for StatefulSetScaleError {
-    fn span_trace(&self) -> Option<&SpanTrace> {
-        match self {
-            StatefulSetScaleError::KubeClient(e) => e.span_trace(),
-            StatefulSetScaleError::Exec(e) => e.span_trace(),
-            StatefulSetScaleError::StatefulSetHasNoReplicas(span_trace) => Some(span_trace),
-            StatefulSetScaleError::StatefulSetNotScaled(_, e) => e.span_trace(),
-        }
-    }
 }
 
 impl ExtractSpanTrace for DailyRoutineError {

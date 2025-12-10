@@ -6,14 +6,14 @@ use tracing::{info, instrument};
 
 use crate::error::SpannedExt;
 use crate::kubernetes_objects::minecraft_chart::WeakMinecraftChart;
+use crate::kubernetes_objects::statefulset::{
+    StatefulSetScaleError, scale_statefulset_to_zero, wait_until_statefulset_scaled,
+};
 use crate::routine::daily::MINECRAFT_SHUTDOWN_POLLING_CONFIG;
 use crate::routine::daily::error::DailyRoutineError;
-use crate::routine::daily::error::StatefulSetScaleError;
-use crate::routine::daily::wait_until_statefulset_scaled::wait_until_statefulset_scaled;
 use crate::scheduler::TaskSpec;
 
 use super::DailyRoutineContext;
-use super::scale_statefulset::scale_statefulset_to_zero;
 
 #[instrument("phase_shutdown_mcserver", skip_all)]
 async fn shutdown_mcserver(

@@ -1,14 +1,15 @@
 use super::DailyRoutineContext;
 use crate::routine::daily::MINECRAFT_SHUTDOWN_POLLING_CONFIG;
-use crate::routine::daily::wait_until_statefulset_scaled::wait_until_statefulset_scaled;
 use crate::scheduler::TaskFuture;
 
 use std::time::Duration;
 
 use tracing::{info, instrument};
 
-use crate::routine::daily::error::{DailyRoutineError, StatefulSetScaleError};
-use crate::routine::daily::scale_statefulset::scale_statefulset_to_zero;
+use crate::kubernetes_objects::statefulset::{
+    StatefulSetScaleError, scale_statefulset_to_zero, wait_until_statefulset_scaled,
+};
+use crate::routine::daily::error::DailyRoutineError;
 
 #[instrument(name = "phase_shutdown_mcproxy", skip(ctx))]
 async fn phase_shutdown_mcproxy(ctx: DailyRoutineContext) -> Result<(), DailyRoutineError> {

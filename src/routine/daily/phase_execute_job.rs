@@ -6,9 +6,9 @@ use tracing_error::SpanTrace;
 
 use crate::error::SpannedExt;
 use crate::kubernetes_objects::MANAGEER_ROLE_NAME;
-use crate::kubernetes_objects::job::CustomJob;
+use crate::kubernetes_objects::custom_job::CustomJob;
+use crate::kubernetes_objects::job::wait_until_job_finished;
 use crate::kubernetes_objects::minecraft_chart::WeakMinecraftChart;
-use crate::routine::daily::wait_until_job_finished::wait_until_job_finished;
 use crate::scheduler::TaskFuture;
 
 use super::DailyRoutineContext;

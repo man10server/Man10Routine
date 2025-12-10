@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::Config;
 use super::polling::PollingConfig;
 use crate::kubernetes_objects::argocd::SharedArgoCd;
-use crate::kubernetes_objects::job::CustomJob;
+use crate::kubernetes_objects::custom_job::CustomJob;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChart;
 use k8s_openapi::api::batch::v1::Job;
 use serde::Deserialize;
