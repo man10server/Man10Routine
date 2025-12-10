@@ -5,6 +5,7 @@ mod phase_execute_job;
 mod phase_shutdown_mcproxy;
 mod phase_shutdown_mcservers;
 mod phase_relaunch_mcserver;
+mod phase_relaunch_mcproxy;
 
 use std::iter;
 use std::sync::Arc;
@@ -19,6 +20,7 @@ use crate::scheduler::{Scheduler, Shutdown, TaskSpec};
 use self::error::DailyRoutineError;
 use self::phase_argocd_teardown::task_phase_argocd_teardown;
 use self::phase_execute_job::task_execute_job;
+use self::phase_relaunch_mcproxy::task_phase_relaunch_mcproxy;
 use self::phase_relaunch_mcserver::task_relaunch_mcserver;
 use self::phase_shutdown_mcproxy::task_phase_shutdown_mcproxy;
 use self::phase_shutdown_mcservers::task_shutdown_mcserver;
@@ -141,6 +143,16 @@ async fn build_daily_tasks(
         })
         .await;
 
+    tasks.push(TaskSpec::new(
+        "relaunch_mcproxy",
+        stream::iter(ctx.config.mcservers.iter())
+            .filter(|(_, mcserver)| async { mcserver.read().await.required_to_start })
+            .map(|(name, _)| format!("relaunch_mcserver/{}", name))
+            .chain(stream::once(future::ready("shutdown_mcproxy".to_string() )))
+            .collect::<Vec<_>>()
+            .await,
+        move |ctx| task_phase_relaunch_mcproxy(ctx),    
+    ));
 
     tasks
 }

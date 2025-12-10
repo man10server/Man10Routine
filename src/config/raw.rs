@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use super::Config;
 use super::polling::PollingConfig;
+use super::Config;
 use crate::kubernetes_objects::argocd::SharedArgoCd;
 use crate::kubernetes_objects::custom_job::CustomJob;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChart;
@@ -34,6 +34,9 @@ pub(super) struct RawMinecraftChart {
     /// Custom jobs that have been created after snapshot of the volumes were taken
     #[serde(default)]
     pub(super) jobs_after_snapshot: BTreeMap<String, RawCustomJob>,
+
+    /// Whether this chart is required to restart the mcproxy
+    pub(super) required_to_start: Option<bool>,
 }
 
 #[cfg_attr(test, derive(PartialEq))]
@@ -79,6 +82,12 @@ pub enum ConfigParseError {
     #[error("mcserver key '{name}' must not contain '/' characters")]
     McserverNameIncludesSlash { name: String },
 
+    #[error("The 'required_to_start' field cannot be set for mcproxy")]
+    RequiredToStartCannotBeSetForMcproxy,
+
+    #[error("Not all 'required_to_start' values for all mcservers should be false.")]
+    McproxyRequiresNoServerToStart,
+
     #[error("Job name '{job_name}' in chart '{chart_name}' must not contain '/' characters")]
     JobNameIncludesSlash {
         chart_name: String,
@@ -97,6 +106,18 @@ impl TryFrom<RawConfig> for Config {
             }
         }
 
+        if raw.mcproxy.required_to_start.is_some() {
+            return Err(ConfigParseError::RequiredToStartCannotBeSetForMcproxy);
+        }
+
+        if !raw
+            .mcservers
+            .values()
+            .any(|s| s.required_to_start.unwrap_or(true))
+        {
+            return Err(ConfigParseError::McproxyRequiresNoServerToStart);
+        }
+
         let namespace = raw.namespace;
         let mcproxy_argocd = Self::build_argocd_hierarchy(&mut argocds, &raw.mcproxy.argocd)?;
         let mcproxy_name = raw
@@ -110,6 +131,7 @@ impl TryFrom<RawConfig> for Config {
             mcproxy_argocd,
             raw.mcproxy.rcon_container,
             mcproxy_jobs,
+            false,
         );
         let mcservers = raw
             .mcservers
@@ -124,6 +146,7 @@ impl TryFrom<RawConfig> for Config {
                     server_argocd,
                     server.rcon_container,
                     jobs_after_snapshot,
+                    server.required_to_start.unwrap_or(true),
                 );
                 Ok((name, mc_chart))
             })
