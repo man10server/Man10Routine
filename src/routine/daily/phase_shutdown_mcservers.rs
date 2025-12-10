@@ -1,15 +1,17 @@
+use std::time::Duration;
+
 use k8s_openapi::api::core::v1::Pod;
 use kube::Api;
 use kube::api::AttachParams;
 use tracing::{Instrument, error, trace_span, warn};
 use tracing::{info, instrument};
 
+use crate::config::polling::PollingConfig;
 use crate::error::SpannedExt;
 use crate::kubernetes_objects::minecraft_chart::WeakMinecraftChart;
 use crate::kubernetes_objects::statefulset::{
     StatefulSetScaleError, scale_statefulset_to_zero, wait_until_statefulset_scaled,
 };
-use crate::routine::daily::MINECRAFT_SHUTDOWN_POLLING_CONFIG;
 use crate::routine::daily::error::DailyRoutineError;
 use crate::scheduler::TaskSpec;
 
@@ -91,9 +93,14 @@ async fn shutdown_mcserver(
             wait_until_statefulset_scaled(
                 client.clone(),
                 &namespace,
-                &pod_name,
+                sts_name,
                 0,
-                MINECRAFT_SHUTDOWN_POLLING_CONFIG,
+                &PollingConfig {
+                    initial_wait: Duration::from_secs(5),
+                    poll_interval: Duration::from_secs(5),
+                    max_wait: Duration::from_mins(5),
+                    ..Default::default()
+                }
             )
             .await
                 .map_err(|e| {

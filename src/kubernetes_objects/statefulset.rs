@@ -20,7 +20,7 @@ pub enum StatefulSetScaleError {
     #[error("StatefulSet has no 'replicas' field")]
     StatefulSetHasNoReplicas(SpanTrace),
 
-    #[error("Statefulset {0} cannot be scaled")]
+    #[error("Statefulset {0} cannot be scaled: {1}")]
     StatefulSetNotScaled(String, SpannedErr<WaitStatefulSetScaleError>),
 }
 
@@ -183,7 +183,7 @@ pub(crate) async fn wait_until_statefulset_scaled(
                 break Err(WaitStatefulSetScaleError::StatefulSetHasNoStatus).with_span_trace();
             }
             Err(e) => {
-                warn!("Error while checking pod '{}': {}", statefulset_name, e);
+                warn!("Error while checking statefulset '{}': {}", statefulset_name, e);
                 warn!(
                     "Waiting another {} seconds before retrying...",
                     polling_config.error_wait.as_secs()
@@ -191,7 +191,7 @@ pub(crate) async fn wait_until_statefulset_scaled(
                 errors_count += 1;
                 if errors_count >= polling_config.max_errors {
                     error!(
-                        "Failed to check pod '{}' status {} times. Aborting wait.",
+                        "Failed to check statefulset '{}' status {} times. Aborting wait.",
                         statefulset_name, errors_count
                     );
                     break Err(WaitStatefulSetScaleError::KubeClient(e)).with_span_trace();

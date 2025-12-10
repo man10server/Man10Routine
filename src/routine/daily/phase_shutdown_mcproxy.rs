@@ -1,5 +1,5 @@
 use super::DailyRoutineContext;
-use crate::routine::daily::MINECRAFT_SHUTDOWN_POLLING_CONFIG;
+use crate::config::polling::PollingConfig;
 use crate::scheduler::TaskFuture;
 
 use std::time::Duration;
@@ -30,7 +30,12 @@ async fn phase_shutdown_mcproxy(ctx: DailyRoutineContext) -> Result<(), DailyRou
         &ctx.config.namespace,
         proxy_sts_name,
         0,
-        MINECRAFT_SHUTDOWN_POLLING_CONFIG,
+        &PollingConfig {
+            initial_wait: Duration::from_secs(60),
+            poll_interval: Duration::from_secs(5),
+            max_wait: Duration::from_secs(150),
+            ..Default::default()
+        },
     )
     .await
     .map_err(|e| StatefulSetScaleError::StatefulSetNotScaled(proxy_sts_name.to_string(), e))

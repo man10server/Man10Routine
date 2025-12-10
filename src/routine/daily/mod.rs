@@ -4,32 +4,24 @@ mod phase_argocd_teardown;
 mod phase_execute_job;
 mod phase_shutdown_mcproxy;
 mod phase_shutdown_mcservers;
+mod phase_relaunch_mcserver;
 
 use std::iter;
 use std::sync::Arc;
-use std::time::Duration;
 
 use futures::{StreamExt, future, stream};
 use kube::Client;
 use tracing::{info, instrument};
 
 use crate::config::Config;
-use crate::config::polling::PollingConfig;
 use crate::scheduler::{Scheduler, Shutdown, TaskSpec};
 
 use self::error::DailyRoutineError;
 use self::phase_argocd_teardown::task_phase_argocd_teardown;
 use self::phase_execute_job::task_execute_job;
+use self::phase_relaunch_mcserver::task_relaunch_mcserver;
 use self::phase_shutdown_mcproxy::task_phase_shutdown_mcproxy;
 use self::phase_shutdown_mcservers::task_shutdown_mcserver;
-
-static MINECRAFT_SHUTDOWN_POLLING_CONFIG: &PollingConfig = &PollingConfig {
-    initial_wait: Duration::from_secs(60),
-    poll_interval: Duration::from_secs(5),
-    max_wait: Duration::from_secs(150),
-    error_wait: Duration::from_secs(10),
-    max_errors: 3,
-};
 
 #[derive(Clone)]
 pub(crate) struct DailyRoutineContext {
@@ -113,9 +105,7 @@ async fn build_daily_tasks(
                     .map(|d| format!("execute_job/after_snapshot/{}/{}", mcserver_name, d))
                     .chain(iter::once(format!("shutdown_mcserver/{}", mcserver_name)))
                     .collect::<Vec<_>>(),
-                move |ctx| {
-                    Box::pin(async move { task_execute_job(ctx, mcserver, job_name, job).await })
-                },
+                move |ctx| task_execute_job(ctx, mcserver, job_name, job),
             )
         })
         .for_each(|task| {
@@ -123,6 +113,34 @@ async fn build_daily_tasks(
             future::ready(())
         })
         .await;
+
+    stream::iter(ctx.config.mcservers.iter())
+        .then(async |(name, mcserver)| {
+            let weak_mcserver = Arc::downgrade(mcserver);
+            let deps: Vec<String> = mcserver
+                .read()
+                .await
+                .jobs_after_snapshot
+                .clone()
+                .into_keys()
+                .map(|d| format!("execute_job/after_snapshot/{}/{}", name, d))
+                .chain(iter::once(format!("shutdown_mcserver/{}", name)))
+                .collect();
+            (name.clone(), weak_mcserver, deps)
+        })
+        .map(|(mcserver_name, mcserver, deps)| {
+            TaskSpec::new(
+                format!("relaunch_mcserver/{}", mcserver_name),
+                deps,
+                move |ctx| task_relaunch_mcserver(ctx, mcserver),
+            )
+        })
+        .for_each(|task| {
+            tasks.push(task);
+            future::ready(())
+        })
+        .await;
+
 
     tasks
 }
