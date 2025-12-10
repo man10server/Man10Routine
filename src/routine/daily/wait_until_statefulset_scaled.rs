@@ -43,8 +43,13 @@ pub(super) async fn wait_until_statefulset_scaled(
     let statefulset_api: Api<StatefulSet> = Api::namespaced(client, namespace);
     loop {
         match statefulset_api.get(statefulset_name).await {
-            Ok(StatefulSet { status: Some(status), .. }) => {
-                if status.current_replicas.unwrap_or(0) == target_replicas && status.available_replicas.unwrap_or(0) == target_replicas {
+            Ok(StatefulSet {
+                status: Some(status),
+                ..
+            }) => {
+                if status.current_replicas.unwrap_or(0) == target_replicas
+                    && status.available_replicas.unwrap_or(0) == target_replicas
+                {
                     info!(
                         "StatefulSet '{}' has been scaled to {} replicas after {} seconds.",
                         statefulset_name,
@@ -76,8 +81,7 @@ pub(super) async fn wait_until_statefulset_scaled(
                 tokio::time::sleep(polling_config.poll_interval).await;
             }
             Ok(_) => {
-                break Err(WaitStatefulSetScaleError::StatefulSetHasNoStatus)
-                    .with_span_trace();
+                break Err(WaitStatefulSetScaleError::StatefulSetHasNoStatus).with_span_trace();
             }
             Err(e) => {
                 warn!("Error while checking pod '{}': {}", statefulset_name, e);
@@ -91,8 +95,7 @@ pub(super) async fn wait_until_statefulset_scaled(
                         "Failed to check pod '{}' status {} times. Aborting wait.",
                         statefulset_name, errors_count
                     );
-                    break Err(WaitStatefulSetScaleError::KubeClient(e))
-                        .with_span_trace()
+                    break Err(WaitStatefulSetScaleError::KubeClient(e)).with_span_trace();
                 }
                 wait_duration += polling_config.error_wait;
                 tokio::time::sleep(polling_config.error_wait).await;

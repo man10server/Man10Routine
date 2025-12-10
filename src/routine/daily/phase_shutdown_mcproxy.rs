@@ -15,7 +15,7 @@ async fn phase_shutdown_mcproxy(ctx: DailyRoutineContext) -> Result<(), DailyRou
     let proxy_sts_name = &ctx.config.mcproxy.read().await.name;
     info!("Stopping proxy server...");
     let scaled =
-        scale_statefulset_to_zero(ctx.client.clone(), &ctx.config.namespace, proxy_sts_name)
+        scale_statefulset_to_zero(ctx.client.clone(), &ctx.config.namespace, proxy_sts_name, 0)
             .await
             .map_err(|e| {
                 DailyRoutineError::ShutdownMinecraftServer(proxy_sts_name.to_string(), e)

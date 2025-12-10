@@ -10,14 +10,19 @@ use crate::kubernetes_objects::MANAGEER_ROLE_NAME;
 use crate::routine::daily::error::StatefulSetScaleError;
 
 #[instrument(
-    "scale_statefulset_to_zero",
+    "scale_statefulset",
     skip(client),
-    fields(kubernetes_namespace = %namespace, statefulset_name = %sts_name)
+    fields(
+        kubernetes_namespace = %namespace,
+        statefulset_name = %sts_name,
+        target_replicas = target_replicas
+    )
 )]
 pub(super) async fn scale_statefulset_to_zero(
     client: kube::Client,
     namespace: &str,
     sts_name: &str,
+    target_replicas: i32,
 ) -> Result<bool, StatefulSetScaleError> {
     let api: Api<StatefulSet> = Api::namespaced(client, namespace);
 
@@ -35,12 +40,12 @@ pub(super) async fn scale_statefulset_to_zero(
     .await?;
 
     match sts.spec.and_then(|s| s.replicas) {
-        Some(0) => {
+        Some(current_replicas) if current_replicas == target_replicas => {
             warn!(
-                "StatefulSet '{}' is already scaled to 0 replicas.",
-                sts_name
+                "StatefulSet '{}' is already scaled to {} replicas.",
+                sts_name, target_replicas
             );
-            warn!("Skipping scaling down StatefulSet.");
+            warn!("Skipping scaling StatefulSet.");
             Ok(false)
         }
         None => Err(StatefulSetScaleError::StatefulSetHasNoReplicas(
@@ -56,7 +61,7 @@ pub(super) async fn scale_statefulset_to_zero(
                         "namespace": namespace,
                     },
                     "spec": {
-                        "replicas": 0
+                        "replicas": target_replicas
                     }
                 });
 
@@ -73,7 +78,7 @@ pub(super) async fn scale_statefulset_to_zero(
             ))
             .await?;
 
-            info!("StatefulSet '{sts_name}' scaled down to 0 replicas.");
+            info!("StatefulSet '{sts_name}' scaled to {target_replicas} replicas.");
             Ok(true)
         }
     }

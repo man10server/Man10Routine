@@ -42,7 +42,7 @@ async fn shutdown_mcserver(
 
     async move {
         let result: Result<(), DailyRoutineError> = async {
-            let scaled = scale_statefulset_to_zero(client.clone(), &namespace, sts_name)
+            let scaled = scale_statefulset_to_zero(client.clone(), &namespace, sts_name, 0)
                 .await
                 .map_err(|e| {
                     DailyRoutineError::ShutdownMinecraftServer(sts_name.clone(), e)
