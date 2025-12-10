@@ -28,6 +28,9 @@ pub(crate) struct MinecraftChart {
     /// Custom jobs that have been created after snapshot of the volumes were taken
     pub(crate) jobs_after_snapshot: BTreeMap<String, CustomJob>,
 
+    /// Whether this MinecraftChart is required to restart the mcproxy
+    pub(crate) required_to_start: bool,
+
     argocd_tear: Option<Result<TearingArgoCdGuard, ArgoCdError>>,
 }
 
@@ -51,6 +54,7 @@ impl MinecraftChart {
         argocd: WeakArgoCd,
         rcon_container: String,
         jobs_after_snapshot: BTreeMap<String, CustomJob>,
+        required_to_start: bool,
     ) -> SharedMinecraftChart {
         Arc::new(RwLock::new(MinecraftChart {
             name,
@@ -58,6 +62,7 @@ impl MinecraftChart {
             rcon_container,
             jobs_after_snapshot,
             argocd_tear: None,
+            required_to_start,
         }))
     }
 

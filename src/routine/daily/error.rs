@@ -20,6 +20,9 @@ pub enum DailyRoutineError {
     #[error("Minecraft Server {0} cannot be shutdown: {1}")]
     ShutdownMinecraftServer(String, StatefulSetScaleError),
 
+    #[error("Minecraft Server {0} cannot be relaunch: {1}")]
+    RelaunchMinecraftServer(String, StatefulSetScaleError),
+
     #[error("Job {0} cannot be finished: {1}")]
     WaitJobFinished(String, SpannedErr<WaitJobFinishedError>),
 
@@ -42,6 +45,7 @@ impl ExtractSpanTrace for DailyRoutineError {
             DailyRoutineError::ArgoCd(e) => e.span_trace(),
             DailyRoutineError::MinecraftChart(e) => e.span_trace(),
             DailyRoutineError::ShutdownMinecraftServer(_, e) => e.span_trace(),
+            DailyRoutineError::RelaunchMinecraftServer(_, e) => e.span_trace(),
             DailyRoutineError::WaitJobFinished(_, e) => e.span_trace(),
             DailyRoutineError::CustomJobHasFailure(_, _, span_trace) => Some(span_trace),
             DailyRoutineError::KubeClient(e) => e.span_trace(),
