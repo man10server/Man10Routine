@@ -52,7 +52,7 @@ pub(super) struct RawCustomJob {
 
     /// Polling configuration for waiting for job completion
     #[serde(default)]
-    pub(super) compeltion_polling: PollingConfig,
+    pub(super) completion_polling: PollingConfig,
 }
 
 const fn default_required() -> bool {
@@ -158,7 +158,7 @@ impl Config {
                         dependencies: job.dependencies,
                         manifest: job.manifest,
                         required: job.required,
-                        completion_polling: job.compeltion_polling,
+                        completion_polling: job.completion_polling,
                     },
                 ))
             })
