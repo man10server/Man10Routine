@@ -1,4 +1,5 @@
 use super::DailyRoutineContext;
+use crate::routine::daily::MINECRAFT_SHUTDOWN_POLLING_CONFIG;
 use crate::scheduler::TaskFuture;
 
 use std::time::Duration;
@@ -24,9 +25,7 @@ async fn phase_shutdown_mcproxy(ctx: DailyRoutineContext) -> Result<(), DailyRou
         ctx.client.clone(),
         &ctx.config.namespace,
         format!("{}-0", proxy_sts_name).as_str(),
-        Duration::from_secs(60),
-        Duration::from_secs(150),
-        5,
+        MINECRAFT_SHUTDOWN_POLLING_CONFIG,
     )
     .await?;
 

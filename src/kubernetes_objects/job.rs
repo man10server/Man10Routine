@@ -1,6 +1,6 @@
-use std::time::Duration;
-
 use k8s_openapi::api::batch::v1::Job;
+
+use crate::config::polling::PollingConfig;
 
 #[derive(Debug, Clone)]
 pub(crate) struct CustomJob {
@@ -13,7 +13,6 @@ pub(crate) struct CustomJob {
     /// Whether the job's successful completion is required to continue routine or not
     pub(crate) required: bool,
 
-    pub(crate) initial_wait: Duration,
-    pub(crate) max_wait: Duration,
-    pub(crate) max_errors: u64,
+    /// Polling configuration for waiting for job completion
+    pub(crate) completion_polling: PollingConfig,
 }

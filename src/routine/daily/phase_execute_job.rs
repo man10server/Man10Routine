@@ -60,9 +60,7 @@ async fn execute_job(
             client,
             &namespace,
             created_job_name,
-            job.initial_wait,
-            job.max_wait,
-            job.max_errors,
+            &job.completion_polling,
         )
         .await
         {

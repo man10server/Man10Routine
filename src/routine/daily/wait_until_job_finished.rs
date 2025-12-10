@@ -1,5 +1,4 @@
 use super::error::{DailyRoutineError, WaitJobFinishedError};
-use std::time::Duration;
 
 use k8s_openapi::api::batch::v1::{Job, JobStatus};
 use kube::Api;
@@ -8,6 +7,7 @@ use tracing::error;
 use tracing::warn;
 use tracing::{info, instrument};
 
+use crate::config::polling::PollingConfig;
 use crate::error::SpannedExt;
 
 #[instrument("wait_until_job_finished", skip(client), level = "trace")]
@@ -15,18 +15,16 @@ pub(super) async fn wait_until_job_finished(
     client: Client,
     namespace: &str,
     job_name: &str,
-    initial_wait: Duration,
-    max_wait: Duration,
-    max_errors: u64,
+    polling_config: &PollingConfig,
 ) -> Result<JobStatus, DailyRoutineError> {
     info!(
         "Waiting {} to {} seconds for job '{}' to finish...",
-        initial_wait.as_secs(),
-        max_wait.as_secs(),
+        polling_config.initial_wait.as_secs(),
+        polling_config.max_wait.as_secs(),
         job_name
     );
-    tokio::time::sleep(initial_wait).await;
-    let mut wait_duration = initial_wait;
+    tokio::time::sleep(polling_config.initial_wait).await;
+    let mut wait_duration = polling_config.initial_wait;
     let mut errors_count = 0u64;
     let job_api: Api<Job> = Api::namespaced(client, namespace);
     loop {
@@ -43,13 +41,16 @@ pub(super) async fn wait_until_job_finished(
                 }
 
                 info!(
-                    "Job '{}' still running (active: {:?}). Waiting another 5 seconds...",
-                    job_name, status.active
+                    "Job '{}' still running after {} seconds (active: {:?}). Waiting another {} seconds...",
+                    job_name,
+                    wait_duration.as_secs(),
+                    status.active,
+                    polling_config.poll_interval.as_secs()
                 );
-                if wait_duration >= max_wait {
+                if wait_duration >= polling_config.max_wait {
                     error!(
                         "Waited more than {} seconds for job '{}' to finish.",
-                        max_wait.as_secs(),
+                        wait_duration.as_secs(),
                         job_name
                     );
                     break Err(WaitJobFinishedError::JobCompletionCheckTimeout(
@@ -58,24 +59,27 @@ pub(super) async fn wait_until_job_finished(
                     .with_span_trace()
                     .map_err(|e| DailyRoutineError::WaitJobFinished(job_name.to_string(), e));
                 }
-                wait_duration += Duration::from_secs(5);
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                wait_duration += polling_config.poll_interval;
+                tokio::time::sleep(polling_config.poll_interval).await;
             }
             Err(e) => {
                 warn!("Error while checking job '{}': {}", job_name, e);
-                warn!("Waiting another 10 seconds before retrying...");
+                warn!(
+                    "Waiting another {} seconds before retrying...",
+                    polling_config.error_wait.as_secs()
+                );
                 errors_count += 1;
-                if errors_count >= max_errors {
+                if errors_count >= polling_config.max_errors {
                     error!(
                         "Failed to check job '{}' status {} times. Aborting wait.",
-                        job_name, max_errors
+                        job_name, errors_count
                     );
                     break Err(e)
                         .with_span_trace()
                         .map_err(DailyRoutineError::KubeClient);
                 }
-                wait_duration += Duration::from_secs(10);
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                wait_duration += polling_config.error_wait;
+                tokio::time::sleep(polling_config.error_wait).await;
             }
         }
     }
