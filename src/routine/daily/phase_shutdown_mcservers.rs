@@ -8,12 +8,12 @@ use crate::error::SpannedExt;
 use crate::kubernetes_objects::minecraft_chart::WeakMinecraftChart;
 use crate::routine::daily::MINECRAFT_SHUTDOWN_POLLING_CONFIG;
 use crate::routine::daily::error::DailyRoutineError;
-use crate::routine::daily::error::ShutdownMinecraftServerError;
+use crate::routine::daily::error::StatefulSetScaleError;
+use crate::routine::daily::wait_until_statefulset_scaled::wait_until_statefulset_scaled;
 use crate::scheduler::TaskSpec;
 
 use super::DailyRoutineContext;
 use super::scale_statefulset::scale_statefulset_to_zero;
-use super::wait_until_pod_stopped::wait_until_pod_stopped;
 
 #[instrument("phase_shutdown_mcserver", skip_all)]
 async fn shutdown_mcserver(
@@ -42,7 +42,11 @@ async fn shutdown_mcserver(
 
     async move {
         let result: Result<(), DailyRoutineError> = async {
-            let scaled = scale_statefulset_to_zero(client.clone(), &namespace, sts_name).await?;
+            let scaled = scale_statefulset_to_zero(client.clone(), &namespace, sts_name)
+                .await
+                .map_err(|e| {
+                    DailyRoutineError::ShutdownMinecraftServer(sts_name.clone(), e)
+                })?;
 
             if !scaled {
                 return Ok(());
@@ -63,8 +67,9 @@ async fn shutdown_mcserver(
                     if let Err(e) = attached
                         .join()
                         .await
-                        .map_err(|e| ShutdownMinecraftServerError::Exec(Box::new(e)))
+                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
                         .with_span_trace()
+                        .map_err(StatefulSetScaleError::Exec)
                         .map_err(|e| DailyRoutineError::ShutdownMinecraftServer(sts_name.clone(), e))
                     {
                         warn!(
@@ -83,13 +88,18 @@ async fn shutdown_mcserver(
                 }
             }
 
-            wait_until_pod_stopped(
+            wait_until_statefulset_scaled(
                 client.clone(),
                 &namespace,
                 &pod_name,
+                0,
                 MINECRAFT_SHUTDOWN_POLLING_CONFIG,
             )
-            .await?;
+            .await
+                .map_err(|e| {
+                    StatefulSetScaleError::StatefulSetNotScaled(sts_name.clone(), e)
+                })
+                .map_err(|e| DailyRoutineError::ShutdownMinecraftServer(sts_name.clone(), e))?;
 
             Ok(())
         }

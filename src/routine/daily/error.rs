@@ -7,6 +7,9 @@ use crate::kubernetes_objects::argocd::ArgoCdError;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChartError;
 use crate::scheduler::InvalidDagError;
 
+use super::wait_until_job_finished::WaitJobFinishedError;
+use super::wait_until_statefulset_scaled::WaitStatefulSetScaleError;
+
 #[derive(Error, Debug)]
 pub enum DailyRoutineError {
     #[error("ArgoCD error: {0}")]
@@ -16,7 +19,7 @@ pub enum DailyRoutineError {
     MinecraftChart(#[from] MinecraftChartError),
 
     #[error("Minecraft Server {0} cannot be shutdown: {1}")]
-    ShutdownMinecraftServer(String, SpannedErr<ShutdownMinecraftServerError>),
+    ShutdownMinecraftServer(String, StatefulSetScaleError),
 
     #[error("Job {0} cannot be finished: {1}")]
     WaitJobFinished(String, SpannedErr<WaitJobFinishedError>),
@@ -35,24 +38,29 @@ pub enum DailyRoutineError {
 }
 
 #[derive(Error, Debug)]
-pub enum ShutdownMinecraftServerError {
+pub enum StatefulSetScaleError {
     #[error("Kubernetes client error: {0}")]
-    KubeClient(kube::Error),
+    KubeClient(SpannedErr<kube::Error>),
 
     #[error("Exec command error: {0}")]
-    Exec(#[source] Box<dyn std::error::Error + Send + Sync>),
+    Exec(SpannedErr<Box<dyn std::error::Error + Send + Sync + 'static>>),
 
-    #[error("Failed to scale Statefulset: the statefulset has no 'replicas' field")]
-    StatefulSetNoReplicas,
+    #[error("StatefulSet has no 'replicas' field")]
+    StatefulSetHasNoReplicas(SpanTrace),
 
-    #[error("Pod did not shutdown within {0} seconds timeout")]
-    PodShutdownCheckTimeout(u64),
+    #[error("Statefulset {0} cannot be scaled")]
+    StatefulSetNotScaled(String, SpannedErr<WaitStatefulSetScaleError>),
 }
 
-#[derive(Error, Debug)]
-pub enum WaitJobFinishedError {
-    #[error("Job did not finish within {0} seconds timeout")]
-    JobCompletionCheckTimeout(u64),
+impl ExtractSpanTrace for StatefulSetScaleError {
+    fn span_trace(&self) -> Option<&SpanTrace> {
+        match self {
+            StatefulSetScaleError::KubeClient(e) => e.span_trace(),
+            StatefulSetScaleError::Exec(e) => e.span_trace(),
+            StatefulSetScaleError::StatefulSetHasNoReplicas(span_trace) => Some(span_trace),
+            StatefulSetScaleError::StatefulSetNotScaled(_, e) => e.span_trace(),
+        }
+    }
 }
 
 impl ExtractSpanTrace for DailyRoutineError {

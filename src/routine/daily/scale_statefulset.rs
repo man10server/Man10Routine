@@ -3,10 +3,11 @@ use kube::Api;
 use kube::api::PatchParams;
 use tracing::{Instrument, warn};
 use tracing::{info, instrument, trace_span};
+use tracing_error::SpanTrace;
 
 use crate::error::SpannedExt;
 use crate::kubernetes_objects::MANAGEER_ROLE_NAME;
-use crate::routine::daily::error::{DailyRoutineError, ShutdownMinecraftServerError};
+use crate::routine::daily::error::StatefulSetScaleError;
 
 #[instrument(
     "scale_statefulset_to_zero",
@@ -17,15 +18,14 @@ pub(super) async fn scale_statefulset_to_zero(
     client: kube::Client,
     namespace: &str,
     sts_name: &str,
-) -> Result<bool, DailyRoutineError> {
+) -> Result<bool, StatefulSetScaleError> {
     let api: Api<StatefulSet> = Api::namespaced(client, namespace);
 
     let sts = async {
         api.get(sts_name)
             .await
-            .map_err(ShutdownMinecraftServerError::KubeClient)
             .with_span_trace()
-            .map_err(|e| DailyRoutineError::ShutdownMinecraftServer(sts_name.to_string(), e))
+            .map_err(StatefulSetScaleError::KubeClient)
     }
     .instrument(trace_span!(
         "get_statefulset",
@@ -43,9 +43,9 @@ pub(super) async fn scale_statefulset_to_zero(
             warn!("Skipping scaling down StatefulSet.");
             Ok(false)
         }
-        None => Err(ShutdownMinecraftServerError::StatefulSetNoReplicas)
-            .with_span_trace()
-            .map_err(|e| DailyRoutineError::ShutdownMinecraftServer(sts_name.to_string(), e)),
+        None => Err(StatefulSetScaleError::StatefulSetHasNoReplicas(
+            SpanTrace::capture(),
+        )),
         Some(_) => {
             async {
                 let patch = serde_json::json!({
@@ -63,11 +63,8 @@ pub(super) async fn scale_statefulset_to_zero(
                 let params = PatchParams::apply(MANAGEER_ROLE_NAME);
                 api.patch(sts_name, &params, &kube::api::Patch::Merge(&patch))
                     .await
-                    .map_err(ShutdownMinecraftServerError::KubeClient)
                     .with_span_trace()
-                    .map_err(|e| {
-                        DailyRoutineError::ShutdownMinecraftServer(sts_name.to_string(), e)
-                    })
+                    .map_err(StatefulSetScaleError::KubeClient)
             }
             .instrument(trace_span!(
                 "scale_down_statefulset",

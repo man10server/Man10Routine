@@ -70,7 +70,8 @@ async fn execute_job(
                 status,
                 SpanTrace::capture(),
             )),
-            Err(e) => Err(e),
+            Err(e) => Err(e)
+                .map_err(|e| DailyRoutineError::WaitJobFinished(created_job_name.to_string(), e)),
         }
     }
     .instrument(span)
