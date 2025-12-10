@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use k8s_openapi::api::core::v1::Pod;
 use kube::Api;
 use kube::api::AttachParams;
@@ -8,6 +6,7 @@ use tracing::{info, instrument};
 
 use crate::error::SpannedExt;
 use crate::kubernetes_objects::minecraft_chart::WeakMinecraftChart;
+use crate::routine::daily::MINECRAFT_SHUTDOWN_POLLING_CONFIG;
 use crate::routine::daily::error::DailyRoutineError;
 use crate::routine::daily::error::ShutdownMinecraftServerError;
 use crate::scheduler::TaskSpec;
@@ -88,9 +87,7 @@ async fn shutdown_mcserver(
                 client.clone(),
                 &namespace,
                 &pod_name,
-                Duration::from_secs(10),
-                Duration::from_secs(150),
-                3,
+                MINECRAFT_SHUTDOWN_POLLING_CONFIG,
             )
             .await?;
 

@@ -10,12 +10,14 @@ mod wait_until_pod_stopped;
 
 use std::iter;
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures::{StreamExt, future, stream};
 use kube::Client;
 use tracing::{info, instrument};
 
 use crate::config::Config;
+use crate::config::polling::PollingConfig;
 use crate::scheduler::{Scheduler, Shutdown, TaskSpec};
 
 use self::error::DailyRoutineError;
@@ -23,6 +25,14 @@ use self::phase_argocd_teardown::task_phase_argocd_teardown;
 use self::phase_execute_job::task_execute_job;
 use self::phase_shutdown_mcproxy::task_phase_shutdown_mcproxy;
 use self::phase_shutdown_mcservers::task_shutdown_mcserver;
+
+static MINECRAFT_SHUTDOWN_POLLING_CONFIG: &PollingConfig = &PollingConfig {
+    initial_wait: Duration::from_secs(60),
+    poll_interval: Duration::from_secs(5),
+    max_wait: Duration::from_secs(150),
+    error_wait: Duration::from_secs(10),
+    max_errors: 3,
+};
 
 #[derive(Clone)]
 pub(crate) struct DailyRoutineContext {

@@ -20,4 +20,4 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 tracing-error = { version = "0.2.1", features = ["traced-error"] }
 color-spantrace = "0.3.0"
 json-patch = "4.1.0"
-duration-string = { version = "0.5.3", features = ["serde"] }
+duration-str = { version = "0.18.0", features = ["serde"] }

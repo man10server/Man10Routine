@@ -1,11 +1,10 @@
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 use super::Config;
+use super::polling::PollingConfig;
 use crate::kubernetes_objects::argocd::SharedArgoCd;
 use crate::kubernetes_objects::job::CustomJob;
 use crate::kubernetes_objects::minecraft_chart::MinecraftChart;
-use duration_string::DurationString;
 use k8s_openapi::api::batch::v1::Job;
 use serde::Deserialize;
 use thiserror::Error;
@@ -51,30 +50,13 @@ pub(super) struct RawCustomJob {
     #[serde(default = "default_required")]
     pub(super) required: bool,
 
-    #[serde(default = "default_initial_wait")]
-    pub(super) initial_wait: DurationString,
-
-    #[serde(default = "default_max_wait")]
-    pub(super) max_wait: DurationString,
-
-    #[serde(default = "default_max_errors")]
-    pub(super) max_errors: u64,
+    /// Polling configuration for waiting for job completion
+    #[serde(default)]
+    pub(super) completion_polling: PollingConfig,
 }
 
 const fn default_required() -> bool {
     true
-}
-
-const fn default_initial_wait() -> DurationString {
-    DurationString::new(Duration::from_secs(600))
-}
-
-const fn default_max_wait() -> DurationString {
-    DurationString::new(Duration::from_secs(600))
-}
-
-const fn default_max_errors() -> u64 {
-    3
 }
 
 #[derive(Error, Debug)]
@@ -176,9 +158,7 @@ impl Config {
                         dependencies: job.dependencies,
                         manifest: job.manifest,
                         required: job.required,
-                        initial_wait: job.initial_wait.into(),
-                        max_wait: job.max_wait.into(),
-                        max_errors: job.max_errors,
+                        completion_polling: job.completion_polling,
                     },
                 ))
             })
