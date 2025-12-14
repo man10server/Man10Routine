@@ -25,4 +25,4 @@ jobs:
           endpoint: ${{ secrets.ATTIC_ENDPOINT }}
           cache: man10_routine
           token: ${{ secrets.ATTIC_JWT }}
-      - run: nix build -L --print-build-logs .#checks.x86_64-linux.crate-test --accept-flake-config
+      - run: nix build -L .#checks.x86_64-linux.crate-test --accept-flake-config
