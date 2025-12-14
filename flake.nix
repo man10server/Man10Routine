@@ -41,14 +41,7 @@
         commonArgs = {
           inherit src;
           strictDeps = true;
-          buildInputs =
-            [ ]
-            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin (
-              with pkgs;
-              [
-                libiconv
-              ]
-            );
+          buildInputs = [ ];
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -129,6 +122,15 @@
 
         apps.default = flake-utils.lib.mkApp {
           drv = crate;
+        };
+
+        packages.dockerImage = pkgs.dockerTools.buildLayeredImage {
+          name = "man10-routine";
+          tag = "latest";
+          contents = [ crate ];
+          config = {
+            Entrypoint = [ "/bin/man10_routine" ];
+          };
         };
       }
     );
