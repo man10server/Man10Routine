@@ -129,7 +129,7 @@
           tag = "latest";
           contents = [ crate ];
           config = {
-            Cmd = [ "/bin/man10_routine" ];
+            Entrypoint = [ "/bin/man10_routine" ];
           };
         };
       }
